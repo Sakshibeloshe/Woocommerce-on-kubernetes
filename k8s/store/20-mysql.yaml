@@ -1,0 +1,82 @@
+# MySQL: the store's database.
+# StatefulSet (not Deployment) because a database needs a stable identity and
+# its OWN disk that follows it: pod "mysql-0" always gets volume "data-mysql-0".
+---
+# Headless Service (clusterIP: None): no load balancing, just a DNS name.
+# WordPress connects to "mysql" (full name: mysql.store.svc.cluster.local).
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql
+  namespace: store
+spec:
+  clusterIP: None
+  selector: { app: mysql }
+  ports:
+    - name: mysql
+      port: 3306
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mysql
+  namespace: store
+spec:
+  serviceName: mysql
+  replicas: 1
+  selector:
+    matchLabels: { app: mysql }
+  template:
+    metadata:
+      labels: { app: mysql }
+    spec:
+      containers:
+        - name: mysql
+          image: mysql:8.4                  # 8.4 = current long-term-support line
+          ports:
+            - containerPort: 3306
+          env:
+            # On FIRST start with an empty volume, the image creates this DB + user.
+            - name: MYSQL_DATABASE
+              value: wordpress
+            - name: MYSQL_USER
+              value: wordpress
+            - name: MYSQL_PASSWORD
+              valueFrom: { secretKeyRef: { name: mysql-credentials, key: password } }
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom: { secretKeyRef: { name: mysql-credentials, key: root-password } }
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/mysql
+          resources:
+            requests: { cpu: 100m, memory: 512Mi }
+            limits:   { cpu: "1",  memory: 1Gi }
+          # First boot initialises the database and can take a minute. The startup
+          # probe gives it up to 5 min before liveness checks begin.
+          startupProbe:
+            exec:
+              command: ["sh", "-c", "MYSQL_PWD=\"$MYSQL_ROOT_PASSWORD\" mysqladmin ping -h 127.0.0.1 -uroot"]
+            periodSeconds: 5
+            failureThreshold: 60
+          # Ready = can actually run a query.
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "MYSQL_PWD=\"$MYSQL_ROOT_PASSWORD\" mysql -h 127.0.0.1 -uroot -e 'SELECT 1'"]
+            periodSeconds: 10
+            timeoutSeconds: 5
+          # Alive = the server process answers. Restart only if this keeps failing.
+          livenessProbe:
+            exec:
+              command: ["sh", "-c", "MYSQL_PWD=\"$MYSQL_ROOT_PASSWORD\" mysqladmin ping -h 127.0.0.1 -uroot"]
+            periodSeconds: 20
+            timeoutSeconds: 5
+  # One PersistentVolumeClaim per pod, created automatically. k3s's default
+  # StorageClass (local-path) turns it into a folder on the node's disk.
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests:
+            storage: 2Gi

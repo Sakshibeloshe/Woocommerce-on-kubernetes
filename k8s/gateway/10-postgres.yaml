@@ -1,0 +1,66 @@
+# Postgres for the gateway: users, API keys, upstream servers, audit log.
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: gateway
+spec:
+  clusterIP: None
+  selector: { app: postgres }
+  ports:
+    - name: postgres
+      port: 5432
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: gateway
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels: { app: postgres }
+  template:
+    metadata:
+      labels: { app: postgres }
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:17-alpine
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: gateway
+            - name: POSTGRES_USER
+              value: gateway
+            - name: POSTGRES_PASSWORD
+              valueFrom: { secretKeyRef: { name: gateway-db, key: password } }
+            - name: PGDATA                 # a subfolder: the volume root contains lost+found on some disks
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+          resources:
+            requests: { cpu: 50m,  memory: 128Mi }
+            limits:   { cpu: 500m, memory: 512Mi }
+          startupProbe:
+            exec: { command: ["pg_isready", "-U", "gateway", "-d", "gateway", "-h", "127.0.0.1"] }
+            periodSeconds: 3
+            failureThreshold: 40
+          readinessProbe:
+            exec: { command: ["pg_isready", "-U", "gateway", "-d", "gateway", "-h", "127.0.0.1"] }
+            periodSeconds: 10
+          livenessProbe:
+            exec: { command: ["pg_isready", "-U", "gateway", "-d", "gateway", "-h", "127.0.0.1"] }
+            periodSeconds: 20
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests:
+            storage: 1Gi

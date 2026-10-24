@@ -1,0 +1,73 @@
+# One-off Job that configures the store with WP-CLI (k8s/store/setup/setup.sh).
+# The scripts reach the pod through a ConfigMap, created from the real files:
+#   kubectl -n store create configmap store-setup-scripts --from-file=k8s/store/setup/ \
+#     --dry-run=client -o yaml | kubectl apply -f -
+# A Job can't be edited after it ran; to re-run it: delete it, then apply again.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: store-setup
+  namespace: store
+spec:
+  backoffLimit: 6                 # retry up to 6 times (e.g. if WordPress isn't up yet)
+  activeDeadlineSeconds: 900      # give up after 15 minutes
+  template:
+    metadata:
+      labels: { app: store-setup }
+    spec:
+      restartPolicy: OnFailure
+      # The wordpress image owns its files as www-data = uid 33, but the wp-cli image's
+      # www-data is uid 82. Run as 33 so WP-CLI can write plugins into the shared volume.
+      securityContext:
+        runAsUser: 33
+        runAsGroup: 33
+      # The volume is ReadWriteOnce (one node). Schedule next to the WordPress pod
+      # so both can mount it, even on a multi-node cluster.
+      affinity:
+        podAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels: { app: wordpress }
+              topologyKey: kubernetes.io/hostname
+      containers:
+        - name: wp-cli
+          image: wordpress:cli-2.12-php8.3
+          command: ["sh", "/scripts/setup.sh"]
+          envFrom:
+            - configMapRef: { name: store-config }   # SITE_URL, STORE_TIMEZONE, ...
+          env:
+            - name: WORDPRESS_DB_HOST
+              value: mysql
+            - name: WORDPRESS_DB_NAME
+              value: wordpress
+            - name: WORDPRESS_DB_USER
+              value: wordpress
+            - name: WORDPRESS_DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: mysql-credentials, key: password } }
+            - name: WP_ADMIN_USER
+              valueFrom: { secretKeyRef: { name: wordpress-admin, key: username } }
+            - name: WP_ADMIN_PASSWORD
+              valueFrom: { secretKeyRef: { name: wordpress-admin, key: password } }
+            - name: WP_ADMIN_EMAIL
+              valueFrom: { secretKeyRef: { name: wordpress-admin, key: email } }
+            - name: WC_CONSUMER_KEY
+              valueFrom: { secretKeyRef: { name: woocommerce-api, key: consumer-key } }
+            - name: WC_CONSUMER_SECRET
+              valueFrom: { secretKeyRef: { name: woocommerce-api, key: consumer-secret } }
+            - name: HOME
+              value: /tmp                # wp-cli wants a writable home for its cache
+          volumeMounts:
+            - name: wordpress
+              mountPath: /var/www/html
+            - name: scripts
+              mountPath: /scripts
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits:   { cpu: "1",  memory: 512Mi }
+      volumes:
+        - name: wordpress
+          persistentVolumeClaim:
+            claimName: wordpress-data
+        - name: scripts
+          configMap:
+            name: store-setup-scripts

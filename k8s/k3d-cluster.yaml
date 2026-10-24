@@ -1,0 +1,16 @@
+# Local Kubernetes cluster (k3s running inside Docker containers).
+# Create:  k3d cluster create --config k8s/k3d-cluster.yaml
+# Delete:  k3d cluster delete woo
+apiVersion: k3d.io/v1alpha5
+kind: Simple
+metadata:
+  name: woo
+servers: 1        # one node is enough locally (and keeps single-node volumes simple)
+agents: 0
+ports:
+  # Your machine's port 80/443 -> k3d's load balancer -> Traefik (the Ingress controller).
+  # This is what makes http://<anything>.localtest.me reach the cluster.
+  - port: 80:80
+    nodeFilters: [loadbalancer]
+  - port: 443:443
+    nodeFilters: [loadbalancer]

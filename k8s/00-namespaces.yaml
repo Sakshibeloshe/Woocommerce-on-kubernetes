@@ -1,0 +1,16 @@
+# Namespaces = folders for resources. Each gets the label
+# kubernetes.io/metadata.name automatically, which NetworkPolicies use to match them.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: store          # WordPress, MySQL, the WooCommerce MCP server
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mcp-servers    # the other upstream MCP servers (notes, toolbox)
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: gateway        # gateway + dashboard (later phases)

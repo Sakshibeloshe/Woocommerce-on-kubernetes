@@ -1,0 +1,119 @@
+# The gateway backend: REST API for the dashboard + the single MCP endpoint.
+---
+# Upstream servers registered on FIRST start (WooCommerce first, as the user story asks).
+# Credential values are not here: "valueFromEnv" names an env var filled from a Secret.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gateway-seed
+  namespace: gateway
+data:
+  servers.json: |
+    [
+      { "slug": "woo",     "name": "WooCommerce", "url": "http://mcp-woocommerce.store.svc/mcp" },
+      { "slug": "notes",   "name": "Team Notes",  "url": "http://mcp-notes.mcp-servers.svc/mcp",
+        "credential": { "type": "bearer", "valueFromEnv": "SEED_NOTES_TOKEN" } },
+      { "slug": "toolbox", "name": "Toolbox",     "url": "http://mcp-toolbox.mcp-servers.svc/mcp" }
+    ]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gateway
+  namespace: gateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: gateway }
+  template:
+    metadata:
+      labels:
+        app: gateway                # the NetworkPolicies of the upstream namespaces allow exactly this label
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+        - name: gateway
+          image: mcp-gateway:0.1.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          env:
+            - name: PUBLIC_URL
+              value: http://dashboard.localtest.me
+            - name: PGHOST
+              value: postgres
+            - name: PGDATABASE
+              value: gateway
+            - name: PGUSER
+              value: gateway
+            - name: PGPASSWORD
+              valueFrom: { secretKeyRef: { name: gateway-db, key: password } }
+            - name: SESSION_SECRET
+              valueFrom: { secretKeyRef: { name: gateway-secrets, key: session-secret } }
+            - name: ENCRYPTION_KEY
+              valueFrom: { secretKeyRef: { name: gateway-secrets, key: encryption-key } }
+            - name: ADMIN_EMAIL
+              valueFrom: { secretKeyRef: { name: gateway-secrets, key: admin-email } }
+            - name: ADMIN_PASSWORD
+              valueFrom: { secretKeyRef: { name: gateway-secrets, key: admin-password } }
+            - name: SEED_SERVERS_FILE
+              value: /config/servers.json
+            - name: SEED_NOTES_TOKEN
+              valueFrom: { secretKeyRef: { name: gateway-upstream-credentials, key: notes-token } }
+            - name: UPSTREAM_REFRESH_INTERVAL_MS
+              value: "10000"
+          volumeMounts:
+            - name: seed
+              mountPath: /config
+              readOnly: true
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests: { cpu: 50m,  memory: 96Mi }
+            limits:   { cpu: 500m, memory: 256Mi }
+          readinessProbe:
+            httpGet: { path: /readyz, port: 8080 }    # includes the database check
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /healthz, port: 8080 }   # process only: a DB outage shouldn't restart us
+            initialDelaySeconds: 10
+            periodSeconds: 20
+      volumes:
+        - name: seed
+          configMap:
+            name: gateway-seed
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gateway
+  namespace: gateway
+spec:
+  selector: { app: gateway }
+  ports:
+    - port: 80
+      targetPort: 8080
+---
+# Public: the MCP endpoint and the dashboard API. (The dashboard UI joins this host later.)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gateway
+  namespace: gateway
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: dashboard.localtest.me
+      http:
+        paths:
+          - path: /mcp
+            pathType: Prefix
+            backend: { service: { name: gateway, port: { number: 80 } } }
+          - path: /api
+            pathType: Prefix
+            backend: { service: { name: gateway, port: { number: 80 } } }

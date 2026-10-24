@@ -1,0 +1,101 @@
+# WordPress (Apache + PHP). WooCommerce gets installed into its volume by the setup Job.
+---
+# Disk for /var/www/html: WordPress code, plugins (WooCommerce), uploaded images.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: wordpress-data
+  namespace: store
+spec:
+  accessModes: [ReadWriteOnce]      # one node at a time (fine: single replica)
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wordpress
+  namespace: store
+spec:
+  replicas: 1
+  # Recreate = stop the old pod before starting the new one. Needed because the
+  # ReadWriteOnce volume can't be shared by an old and a new pod during an update.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels: { app: wordpress }
+  template:
+    metadata:
+      labels: { app: wordpress }
+    spec:
+      containers:
+        - name: wordpress
+          image: wordpress:7.1-apache
+          ports:
+            - containerPort: 80
+          env:
+            # The image writes these into wp-config.php (same as in Docker Compose).
+            - name: WORDPRESS_DB_HOST
+              value: mysql                  # the headless Service above, same namespace
+            - name: WORDPRESS_DB_NAME
+              value: wordpress
+            - name: WORDPRESS_DB_USER
+              value: wordpress
+            - name: WORDPRESS_DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: mysql-credentials, key: password } }
+          volumeMounts:
+            - name: data
+              mountPath: /var/www/html
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits:   { cpu: "1",  memory: 512Mi }
+          # Ready = PHP runs AND the database answers. If MySQL is down,
+          # wp-login.php returns 500 and the pod is taken out of the Service
+          # (visitors get an error from Traefik instead of a broken page).
+          # Before installation it redirects (302), which also counts as success.
+          readinessProbe:
+            httpGet: { path: /wp-login.php, port: 80 }
+            periodSeconds: 10
+            timeoutSeconds: 5
+          # Alive = Apache accepts connections. Deliberately NOT tied to the DB:
+          # restarting WordPress wouldn't fix a database outage.
+          livenessProbe:
+            tcpSocket: { port: 80 }
+            initialDelaySeconds: 30
+            periodSeconds: 20
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: wordpress-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: wordpress
+  namespace: store
+spec:
+  selector: { app: wordpress }
+  ports:
+    - port: 80
+      targetPort: 80
+---
+# The only public door into this namespace: the storefront.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: storefront
+  namespace: store
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: store.localtest.me
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: wordpress
+                port:
+                  number: 80

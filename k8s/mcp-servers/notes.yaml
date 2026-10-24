@@ -1,0 +1,76 @@
+# Notes MCP server: requires a bearer token (Secret notes-auth), stores notes on a volume.
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: notes-data
+  namespace: mcp-servers
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 100Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp-notes
+  namespace: mcp-servers
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate                # one pod at a time owns the notes file
+  selector:
+    matchLabels: { app: mcp-notes }
+  template:
+    metadata:
+      labels: { app: mcp-notes }
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000             # make the mounted volume writable for uid 1000
+      containers:
+        - name: mcp
+          image: mcp-notes:0.1.1
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3000
+          env:
+            - name: NOTES_API_TOKEN
+              valueFrom: { secretKeyRef: { name: notes-auth, key: token } }
+            - name: NOTES_FILE
+              value: /data/notes.json
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true   # only /data is writable
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests: { cpu: 25m,  memory: 64Mi }
+            limits:   { cpu: 250m, memory: 128Mi }
+          readinessProbe:
+            httpGet: { path: /healthz, port: 3000 }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /healthz, port: 3000 }
+            initialDelaySeconds: 5
+            periodSeconds: 20
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: notes-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp-notes
+  namespace: mcp-servers
+spec:
+  selector: { app: mcp-notes }
+  ports:
+    - port: 80
+      targetPort: 3000

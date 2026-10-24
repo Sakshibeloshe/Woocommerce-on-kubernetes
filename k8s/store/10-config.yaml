@@ -1,0 +1,14 @@
+# Non-secret store settings, shared by the setup Job and the MCP server.
+# Moving to a VPS later = changing values here (SITE_URL above all), not code.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: store-config
+  namespace: store
+data:
+  SITE_URL: http://store.localtest.me
+  STORE_TITLE: Demo Store
+  STORE_TIMEZONE: Asia/Kolkata
+  STORE_COUNTRY: "IN:MH"          # WooCommerce "country:state" code
+  STORE_CURRENCY: INR
+  WOOCOMMERCE_VERSION: "11.2.1"   # pinned: same version every install

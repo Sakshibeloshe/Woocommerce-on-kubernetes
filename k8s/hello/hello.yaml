@@ -1,0 +1,91 @@
+# Practice app: nginx behind an Ingress at http://hello.localtest.me
+# Apply:   kubectl apply -f k8s/hello/hello.yaml
+# Remove:  kubectl delete -f k8s/hello/hello.yaml
+---
+# A Namespace is a folder for resources. Deleting it deletes everything inside.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: hello
+---
+# A ConfigMap holds non-secret config/files. Here: the page nginx will serve.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hello-page
+  namespace: hello
+data:
+  index.html: |
+    <h1>Hello from Kubernetes</h1>
+    <p>Served by nginx in namespace "hello", via Traefik Ingress.</p>
+---
+# A Deployment says "keep N copies of this container running". If a Pod dies,
+# the Deployment creates a new one.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hello
+  namespace: hello
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: hello }        # which Pods belong to this Deployment
+  template:                            # the blueprint for each Pod
+    metadata:
+      labels: { app: hello }
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.27-alpine
+          ports:
+            - containerPort: 80
+          volumeMounts:
+            - name: page
+              mountPath: /usr/share/nginx/html   # ConfigMap files appear here
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }  # what the scheduler reserves
+            limits:   { cpu: 100m, memory: 64Mi } # hard ceiling
+          readinessProbe:              # "send me traffic only when this succeeds"
+            httpGet: { path: /, port: 80 }
+            periodSeconds: 5
+          livenessProbe:               # "restart me if this keeps failing"
+            httpGet: { path: /, port: 80 }
+            periodSeconds: 10
+      volumes:
+        - name: page
+          configMap:
+            name: hello-page
+---
+# A Service gives the Pods one stable name + IP (hello.hello.svc) and
+# load-balances across them. Pods come and go; the Service stays.
+apiVersion: v1
+kind: Service
+metadata:
+  name: hello
+  namespace: hello
+spec:
+  selector: { app: hello }             # send traffic to Pods with this label
+  ports:
+    - port: 80
+      targetPort: 80
+---
+# An Ingress is a rule for the Ingress controller (Traefik in k3d):
+# "requests for host hello.localtest.me go to Service hello, port 80".
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: hello
+  namespace: hello
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: hello.localtest.me
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: hello
+                port:
+                  number: 80

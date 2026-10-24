@@ -1,0 +1,75 @@
+# Local WooCommerce sandbox (Phase 0-5).
+# Purpose: learn how WordPress + WooCommerce behave before moving to Kubernetes.
+# Passwords come from the .env file next to this one (copy .env.example -> .env),
+# so no secret is written in this file. Same rule we will follow in Kubernetes.
+
+services:
+  # The database. WordPress stores everything here: products, orders, users,
+  # settings, and even the site's own URL.
+  db:
+    image: mysql:8.0
+    restart: unless-stopped            # come back automatically when Docker starts
+    environment:
+      MYSQL_DATABASE: wordpress
+      MYSQL_USER: wp
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+    volumes:
+      - dbdata:/var/lib/mysql          # keeps data when the container is recreated
+    healthcheck:                       # "is MySQL actually ready to accept queries?"
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-p${DB_ROOT_PASSWORD}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # The web server: Apache + PHP + WordPress code. WooCommerce is a plugin
+  # that gets installed into this container's /var/www/html.
+  wordpress:
+    image: wordpress:7.1-apache        # pinned; current WooCommerce needs WordPress >= 7.0
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy     # don't start until MySQL answers
+    ports: ["8080:80"]                 # your browser -> localhost:8080 -> container port 80
+    environment:
+      WORDPRESS_DB_HOST: db            # "db" is the service name above; Docker's DNS resolves it
+      WORDPRESS_DB_NAME: wordpress
+      WORDPRESS_DB_USER: wp
+      WORDPRESS_DB_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - wpdata:/var/www/html           # WordPress files, plugins, uploaded images
+
+  # Our WooCommerce MCP server, built from ../mcp-woocommerce/Dockerfile.
+  mcp-woocommerce:
+    build: ../mcp-woocommerce
+    image: mcp-woocommerce:dev
+    restart: unless-stopped
+    depends_on: [wordpress]
+    ports: ["3000:3000"]               # Inspector on your machine -> localhost:3000/mcp
+    env_file: ../mcp-woocommerce/.env  # WC_CONSUMER_KEY / WC_CONSUMER_SECRET (git-ignored)
+    environment:
+      # Inside Docker's network, "localhost" would mean this container itself.
+      # WordPress is reached by its service name instead (overrides the .env value).
+      WC_BASE_URL: http://wordpress
+      STORE_TIMEZONE: Asia/Kolkata
+
+  # WP-CLI: a command-line tool for WordPress. Not a long-running service;
+  # we run it on demand (profile "tools") to install/configure the store.
+  # It mounts the SAME files and DB as the wordpress container.
+  wpcli:
+    image: wordpress:cli
+    profiles: ["tools"]
+    depends_on: [db, wordpress]
+    user: "33:33"                      # www-data, same user that owns the WordPress files
+    environment:
+      WORDPRESS_DB_HOST: db
+      WORDPRESS_DB_NAME: wordpress
+      WORDPRESS_DB_USER: wp
+      WORDPRESS_DB_PASSWORD: ${DB_PASSWORD}
+      WP_CLI_CACHE_DIR: /tmp/wp-cli-cache   # www-data has no writable home dir
+    volumes:
+      - wpdata:/var/www/html
+
+volumes:
+  dbdata:
+  wpdata:

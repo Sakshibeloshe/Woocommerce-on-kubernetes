@@ -1,0 +1,42 @@
+# NetworkPolicies = firewall rules between pods, enforced by k3s (kube-router).
+# Once a pod is selected by a policy with policyTypes: [Ingress], ALL incoming
+# traffic to it is denied except what a rule below allows.
+---
+# The MCP server accepts connections ONLY from gateway pods in the "gateway" namespace.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: mcp-woocommerce-from-gateway-only
+  namespace: store
+spec:
+  podSelector:
+    matchLabels: { app: mcp-woocommerce }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        # Both conditions in ONE list item = AND: namespace "gateway" AND label app=gateway.
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: gateway }
+          podSelector:
+            matchLabels: { app: gateway }
+      ports:
+        - port: 3000                    # the container port, not the Service port
+          protocol: TCP
+---
+# MySQL accepts connections only from WordPress and the setup Job.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: mysql-from-wordpress-only
+  namespace: store
+spec:
+  podSelector:
+    matchLabels: { app: mysql }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector: { matchLabels: { app: wordpress } }
+        - podSelector: { matchLabels: { app: store-setup } }
+      ports:
+        - port: 3306
+          protocol: TCP

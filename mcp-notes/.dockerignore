@@ -1,0 +1,9 @@
+# Never send these into the image build.
+# (Comments must be on their own line in this file.)
+
+# secrets: must arrive at runtime, never baked into an image
+.env
+# rebuilt inside the image, for Linux
+node_modules
+dist
+*.log
