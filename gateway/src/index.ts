@@ -10,6 +10,7 @@ import { usersRouter } from "./routes/users.js";
 import { keysRouter } from "./routes/keys.js";
 import { serversRouter } from "./routes/servers.js";
 import { auditRouter } from "./routes/audit.js";
+import { chatRouter } from "./routes/chat.js";
 
 await waitForDb();
 await migrate();
@@ -40,6 +41,7 @@ app.use("/api/users", usersRouter);
 app.use("/api/keys", keysRouter);
 app.use("/api/servers", serversRouter);
 app.use("/api/audit", auditRouter);
+app.use("/api/chat", chatRouter);
 
 // Last-resort error handler: log details, return nothing internal to the client.
 app.use((err: Error & { type?: string }, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

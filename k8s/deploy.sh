@@ -18,7 +18,8 @@ declare -A IMAGES=(
   [mcp-woocommerce]="mcp-woocommerce:0.1.1"
   [mcp-notes]="mcp-notes:0.1.1"
   [mcp-toolbox]="mcp-toolbox:0.1.1"
-  [gateway]="mcp-gateway:0.1.0"
+  [gateway]="mcp-gateway:0.2.2"
+  [dashboard]="mcp-dashboard:0.1.0"
 )
 
 echo "== 1. Build our images and load them into the cluster (it can't see your local Docker images)"

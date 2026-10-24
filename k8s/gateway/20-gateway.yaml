@@ -35,7 +35,7 @@ spec:
         runAsUser: 1000
       containers:
         - name: gateway
-          image: mcp-gateway:0.1.0
+          image: mcp-gateway:0.2.2
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080
@@ -64,6 +64,17 @@ spec:
               valueFrom: { secretKeyRef: { name: gateway-upstream-credentials, key: notes-token } }
             - name: UPSTREAM_REFRESH_INTERVAL_MS
               value: "10000"
+            # Chat agent: Ollama on the host PC (Docker Desktop forwards host.docker.internal).
+            - name: LLM_BASE_URL
+              value: http://host.docker.internal:11434/v1
+            - name: LLM_MODEL
+              value: qwen3:8b
+            - name: LLM_REASONING_EFFORT   # "none" = skip qwen3's thinking: ~4x faster on a laptop
+              value: "none"
+            - name: LLM_TIMEOUT_MS         # a local model on a laptop GPU is slow; cloud APIs need far less
+              value: "300000"
+            - name: LLM_API_KEY          # empty for Ollama; a cloud provider's key lives in this Secret
+              valueFrom: { secretKeyRef: { name: gateway-llm, key: api-key, optional: true } }
           volumeMounts:
             - name: seed
               mountPath: /config
@@ -99,7 +110,8 @@ spec:
     - port: 80
       targetPort: 8080
 ---
-# Public: the MCP endpoint and the dashboard API. (The dashboard UI joins this host later.)
+# Public: one host for everything. Longest path wins: /mcp and /api go to the gateway,
+# everything else to the dashboard's static files.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -117,3 +129,6 @@ spec:
           - path: /api
             pathType: Prefix
             backend: { service: { name: gateway, port: { number: 80 } } }
+          - path: /
+            pathType: Prefix
+            backend: { service: { name: dashboard, port: { number: 80 } } }

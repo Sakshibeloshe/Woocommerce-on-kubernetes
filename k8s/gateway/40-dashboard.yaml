@@ -1,0 +1,56 @@
+# The dashboard: static React files served by nginx (non-root). It holds no secrets
+# and talks only to /api on the same host (routed to the gateway by the Ingress).
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dashboard
+  namespace: gateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: dashboard }
+  template:
+    metadata:
+      labels: { app: dashboard }
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101                # "nginx" user of nginx-unprivileged
+      containers:
+        - name: nginx
+          image: mcp-dashboard:0.1.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: tmp                 # nginx needs a writable place for its pid and temp files
+              mountPath: /tmp
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits:   { cpu: 200m, memory: 64Mi }
+          readinessProbe:
+            httpGet: { path: /healthz, port: 8080 }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /healthz, port: 8080 }
+            periodSeconds: 20
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dashboard
+  namespace: gateway
+spec:
+  selector: { app: dashboard }
+  ports:
+    - port: 80
+      targetPort: 8080

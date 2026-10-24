@@ -39,4 +39,17 @@ export const config = {
   },
   // How often every upstream is re-checked (status + tool list).
   refreshIntervalMs: Number(process.env.UPSTREAM_REFRESH_INTERVAL_MS ?? 15_000),
+
+  // Chat agent: any OpenAI-compatible chat completions API.
+  //   Ollama: http://host.docker.internal:11434/v1   Groq: https://api.groq.com/openai/v1
+  //   Gemini: https://generativelanguage.googleapis.com/v1beta/openai
+  llm: {
+    baseUrl: process.env.LLM_BASE_URL ?? "",
+    model: process.env.LLM_MODEL ?? "qwen3:8b",
+    apiKey: process.env.LLM_API_KEY ?? "",       // from a Secret; empty for Ollama
+    // Optional, e.g. "none" to switch off qwen3's slow "thinking" mode on Ollama.
+    reasoningEffort: process.env.LLM_REASONING_EFFORT ?? "",
+    maxIterations: Number(process.env.LLM_MAX_ITERATIONS ?? 8),
+    timeoutMs: Number(process.env.LLM_TIMEOUT_MS ?? 120_000),
+  },
 };
