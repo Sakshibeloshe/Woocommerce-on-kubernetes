@@ -1,0 +1,13 @@
+{{- if .Values.namespaces.create }}
+{{- range $ns := list .Values.namespaces.store .Values.namespaces.mcpServers .Values.namespaces.gateway }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ $ns }}
+  labels: {{- include "platform.labels" $ | nindent 4 }}
+  annotations:
+    # Keep the namespace (and its volumes) if the release is uninstalled by mistake.
+    helm.sh/resource-policy: keep
+{{- end }}
+{{- end }}

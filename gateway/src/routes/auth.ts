@@ -8,6 +8,9 @@ import { ah, parseBody } from "../http.js";
 
 export const authRouter = Router();
 
+// A real scrypt hash of a random string, used to spend the same time on unknown emails.
+const DUMMY_HASH = await hashPassword(Math.random().toString(36));
+
 const password = z.string().min(10, "Password must be at least 10 characters").max(200);
 
 authRouter.post("/login", ah(async (req, res) => {
@@ -18,8 +21,10 @@ authRouter.post("/login", ah(async (req, res) => {
     [body.email]
   );
   const row = rows[0];
-  // Same error for "no such user" and "wrong password", so emails can't be probed.
-  if (!row || !(await verifyPassword(body.password, row.password_hash))) {
+  // Same error AND same work for "no such user" and "wrong password", so emails can't be
+  // probed by message or by response time (a dummy hash is checked when the user doesn't exist).
+  const valid = await verifyPassword(body.password, row?.password_hash ?? DUMMY_HASH);
+  if (!row || !valid) {
     return res.status(401).json({ error: "Invalid email or password" });
   }
   const user: User = { id: row.id, email: row.email, name: row.name, role: row.role };

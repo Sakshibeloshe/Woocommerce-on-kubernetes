@@ -1,0 +1,108 @@
+{{- $ns := .Values.namespaces.gateway -}}
+{{- $store := .Values.namespaces.store -}}
+{{- $mcp := .Values.namespaces.mcpServers -}}
+{{- $allowed := .Values.gateway.ssrf.allowedNamespaces | default (list $store $mcp) -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gateway-seed
+  namespace: {{ $ns }}
+  labels: {{- include "platform.labels" . | nindent 4 }}
+data:
+  # Registered on FIRST start only (WooCommerce first). Credential values come from env.
+  servers.json: |
+    [
+      { "slug": "woo", "name": "WooCommerce", "url": "http://mcp-woocommerce.{{ $store }}.svc/mcp" }
+      {{- if .Values.mcp.notes.enabled }},
+      { "slug": "notes", "name": "Team Notes", "url": "http://mcp-notes.{{ $mcp }}.svc/mcp",
+        "credential": { "type": "bearer", "valueFromEnv": "SEED_NOTES_TOKEN" } }
+      {{- end }}
+      {{- if .Values.mcp.toolbox.enabled }},
+      { "slug": "toolbox", "name": "Toolbox", "url": "http://mcp-toolbox.{{ $mcp }}.svc/mcp" }
+      {{- end }}
+    ]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gateway
+  namespace: {{ $ns }}
+  labels: {{- include "platform.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.gateway.replicas }}
+  selector:
+    matchLabels: { app: gateway }
+  template:
+    metadata:
+      labels:
+        app: gateway                    # upstream NetworkPolicies allow exactly this label
+    spec:
+      {{- include "platform.podDefaults" . | nindent 6 }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+        - name: gateway
+          image: {{ include "platform.image" (list .Values.gateway.image $) }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - containerPort: 8080
+          env:
+            - { name: PUBLIC_URL, value: {{ include "platform.publicUrl" . | quote }} }
+            - { name: COOKIE_SECURE, value: {{ .Values.ingress.tls.enabled | quote }} }
+            - { name: PGHOST, value: postgres }
+            - { name: PGDATABASE, value: gateway }
+            - { name: PGUSER, value: gateway }
+            - name: PGPASSWORD
+              valueFrom: { secretKeyRef: { name: gateway-db, key: password } }
+            - name: SESSION_SECRET
+              valueFrom: { secretKeyRef: { name: gateway-secrets, key: session-secret } }
+            - name: ENCRYPTION_KEY
+              valueFrom: { secretKeyRef: { name: gateway-secrets, key: encryption-key } }
+            - name: ADMIN_EMAIL
+              valueFrom: { secretKeyRef: { name: gateway-secrets, key: admin-email } }
+            - name: ADMIN_PASSWORD
+              valueFrom: { secretKeyRef: { name: gateway-secrets, key: admin-password } }
+            {{- if .Values.gateway.seedServers }}
+            - { name: SEED_SERVERS_FILE, value: /config/servers.json }
+            {{- end }}
+            {{- if .Values.mcp.notes.enabled }}
+            - name: SEED_NOTES_TOKEN
+              valueFrom: { secretKeyRef: { name: gateway-upstream-credentials, key: notes-token } }
+            {{- end }}
+            - { name: UPSTREAM_REFRESH_INTERVAL_MS, value: {{ .Values.gateway.refreshIntervalMs | quote }} }
+            - { name: SSRF_ALLOWED_NAMESPACES, value: {{ join "," $allowed | quote }} }
+            - { name: SSRF_ALLOW_PRIVATE_NETWORKS, value: {{ .Values.gateway.ssrf.allowPrivateNetworks | quote }} }
+            - { name: LLM_BASE_URL, value: {{ .Values.gateway.llm.baseUrl | quote }} }
+            - { name: LLM_MODEL, value: {{ .Values.gateway.llm.model | quote }} }
+            - { name: LLM_REASONING_EFFORT, value: {{ .Values.gateway.llm.reasoningEffort | quote }} }
+            - { name: LLM_TIMEOUT_MS, value: {{ .Values.gateway.llm.timeoutMs | quote }} }
+            {{- if .Values.gateway.llm.existingSecret }}
+            - name: LLM_API_KEY
+              valueFrom: { secretKeyRef: { name: {{ .Values.gateway.llm.existingSecret }}, key: {{ .Values.gateway.llm.existingSecretKey }} } }
+            {{- end }}
+          volumeMounts:
+            - { name: seed, mountPath: /config, readOnly: true }
+          {{- include "platform.containerSecurity" . | nindent 10 }}
+          resources: {{- toYaml .Values.gateway.resources | nindent 12 }}
+          readinessProbe:
+            httpGet: { path: /readyz, port: 8080 }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /healthz, port: 8080 }
+            initialDelaySeconds: 10
+            periodSeconds: 20
+      volumes:
+        - name: seed
+          configMap: { name: gateway-seed }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gateway
+  namespace: {{ $ns }}
+  labels: {{- include "platform.labels" . | nindent 4 }}
+spec:
+  selector: { app: gateway }
+  ports:
+    - { port: 80, targetPort: 8080 }

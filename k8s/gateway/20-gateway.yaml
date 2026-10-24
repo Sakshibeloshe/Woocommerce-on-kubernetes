@@ -35,7 +35,7 @@ spec:
         runAsUser: 1000
       containers:
         - name: gateway
-          image: mcp-gateway:0.2.2
+          image: mcp-gateway:0.3.0
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080
@@ -64,6 +64,8 @@ spec:
               valueFrom: { secretKeyRef: { name: gateway-upstream-credentials, key: notes-token } }
             - name: UPSTREAM_REFRESH_INTERVAL_MS
               value: "10000"
+            - name: SSRF_ALLOWED_NAMESPACES   # in-cluster upstreams may only live here
+              value: store,mcp-servers
             # Chat agent: Ollama on the host PC (Docker Desktop forwards host.docker.internal).
             - name: LLM_BASE_URL
               value: http://host.docker.internal:11434/v1

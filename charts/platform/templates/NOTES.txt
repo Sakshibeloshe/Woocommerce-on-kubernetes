@@ -1,0 +1,13 @@
+Platform installed (release "{{ .Release.Name }}", revision {{ .Release.Revision }}).
+
+  Storefront:    {{ include "platform.siteUrl" . }}
+  Dashboard:     {{ include "platform.publicUrl" . }}
+  MCP endpoint:  {{ include "platform.publicUrl" . }}/mcp   (header: Authorization: Bearer <API key>)
+
+First admin: {{ .Values.gateway.adminEmail }}. Password (bash):
+  kubectl -n {{ .Values.namespaces.gateway }} get secret gateway-secrets -o jsonpath='{.data.admin-password}' | base64 -d
+WordPress admin ({{ .Values.store.adminUser }}) password:
+  kubectl -n {{ .Values.namespaces.store }} get secret wordpress-admin -o jsonpath='{.data.password}' | base64 -d
+
+Store setup Job logs:
+  kubectl -n {{ .Values.namespaces.store }} logs job/store-setup

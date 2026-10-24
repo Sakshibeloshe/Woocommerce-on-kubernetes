@@ -8,6 +8,7 @@ import { encrypt } from "../crypto.js";
 import { requireAdmin, requireSession } from "../auth.js";
 import { ah, isUniqueViolation, parseBody } from "../http.js";
 import { upstreams, type ServerRow } from "../upstreams.js";
+import { validateUpstreamUrl } from "../ssrf.js";
 
 export const serversRouter = Router();
 serversRouter.use(requireSession);
@@ -78,6 +79,8 @@ serversRouter.get("/", ah(async (req, res) => {
 serversRouter.post("/", requireAdmin, ah(async (req, res) => {
   const body = parseBody(createSchema, req, res);
   if (!body) return;
+  const refused = await validateUpstreamUrl(body.url);
+  if (refused) return res.status(400).json({ error: `URL not allowed: ${refused}` });
   const cred = credentialColumns(body.credential);
   try {
     const { rows } = await pool.query<ServerRow>(
@@ -98,6 +101,10 @@ serversRouter.patch("/:id", requireAdmin, ah(async (req, res) => {
   if (!body) return;
   const current = await getRow(req.params.id);
   if (!current) return res.status(404).json({ error: "Server not found" });
+  if (body.url) {
+    const refused = await validateUpstreamUrl(body.url);
+    if (refused) return res.status(400).json({ error: `URL not allowed: ${refused}` });
+  }
   const cred = body.credential ? credentialColumns(body.credential) : null;
   const { rows } = await pool.query<ServerRow>(
     `UPDATE upstream_servers SET

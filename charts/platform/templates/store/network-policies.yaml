@@ -1,0 +1,78 @@
+{{- if .Values.networkPolicies.enabled }}
+{{- $ns := .Values.namespaces.store -}}
+{{ include "platform.namespaceBaseline" (list . $ns) }}
+---
+# WordPress: in from the ingress controller (customers) and the MCP server;
+# out to MySQL and the internet (plugin/theme updates, WooCommerce services).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: wordpress
+  namespace: {{ $ns }}
+  labels: {{- include "platform.labels" . | nindent 4 }}
+spec:
+  podSelector: { matchLabels: { app: wordpress } }
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        {{- include "platform.fromIngressController" . | nindent 8 }}
+        - podSelector: { matchLabels: { app: mcp-woocommerce } }
+      ports: [{ port: 80, protocol: TCP }]
+  egress:
+    - to: [{ podSelector: { matchLabels: { app: mysql } } }]
+      ports: [{ port: 3306, protocol: TCP }]
+    - to:
+        {{- include "platform.internet" . | nindent 8 }}
+      ports: [{ port: 443, protocol: TCP }, { port: 80, protocol: TCP }]
+---
+# MySQL: only WordPress and the setup Job may connect; it connects to nothing.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: mysql
+  namespace: {{ $ns }}
+  labels: {{- include "platform.labels" . | nindent 4 }}
+spec:
+  podSelector: { matchLabels: { app: mysql } }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector: { matchLabels: { app: wordpress } }
+        - podSelector: { matchLabels: { app: store-setup } }
+      ports: [{ port: 3306, protocol: TCP }]
+---
+# Setup Job: out to MySQL and the internet (downloads WooCommerce from wordpress.org).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: store-setup
+  namespace: {{ $ns }}
+  labels: {{- include "platform.labels" . | nindent 4 }}
+spec:
+  podSelector: { matchLabels: { app: store-setup } }
+  policyTypes: [Egress]
+  egress:
+    - to: [{ podSelector: { matchLabels: { app: mysql } } }]
+      ports: [{ port: 3306, protocol: TCP }]
+    - to:
+        {{- include "platform.internet" . | nindent 8 }}
+      ports: [{ port: 443, protocol: TCP }, { port: 80, protocol: TCP }]
+---
+# WooCommerce MCP server: in ONLY from gateway pods; out ONLY to WordPress.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: mcp-woocommerce
+  namespace: {{ $ns }}
+  labels: {{- include "platform.labels" . | nindent 4 }}
+spec:
+  podSelector: { matchLabels: { app: mcp-woocommerce } }
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        {{- include "platform.fromGateway" . | nindent 8 }}
+      ports: [{ port: 3000, protocol: TCP }]
+  egress:
+    - to: [{ podSelector: { matchLabels: { app: wordpress } } }]
+      ports: [{ port: 80, protocol: TCP }]
+{{- end }}

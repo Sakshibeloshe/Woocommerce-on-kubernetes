@@ -18,7 +18,7 @@ declare -A IMAGES=(
   [mcp-woocommerce]="mcp-woocommerce:0.1.1"
   [mcp-notes]="mcp-notes:0.1.1"
   [mcp-toolbox]="mcp-toolbox:0.1.1"
-  [gateway]="mcp-gateway:0.2.2"
+  [gateway]="mcp-gateway:0.3.0"
   [dashboard]="mcp-dashboard:0.1.0"
 )
 
@@ -35,7 +35,7 @@ echo "== 3. Store: config, MySQL, WordPress, Ingress"
 kubectl apply -f k8s/store/10-config.yaml -f k8s/store/20-mysql.yaml -f k8s/store/30-wordpress.yaml
 
 echo "== 4. Store setup Job (re-run from scratch each time; it's idempotent)"
-kubectl -n store create configmap store-setup-scripts --from-file=k8s/store/setup/ --dry-run=client -o yaml | kubectl apply -f -
+kubectl -n store create configmap store-setup-scripts --from-file=charts/platform/files/store-setup/ --dry-run=client -o yaml | kubectl apply -f -
 kubectl -n store delete job store-setup --ignore-not-found
 kubectl apply -f k8s/store/40-setup-job.yaml
 kubectl -n store wait --for=condition=complete job/store-setup --timeout=900s

@@ -1,0 +1,129 @@
+# Default values. Everything that differs between environments is a value here;
+# values-local.yaml and values-prod.yaml override only what they need.
+# No secret values belong in any values file (see "secrets" below).
+
+global:
+  storageClass: ""            # "" = the cluster's default StorageClass (k3s: local-path)
+  imageRegistry: ""           # prefix for OUR images, e.g. "ghcr.io/you". "" = images loaded locally
+  imagePullPolicy: IfNotPresent
+  imagePullSecrets: []        # e.g. [{ name: ghcr-pull }] for a private registry
+
+# The chart can create the three namespaces, or use ones that already exist
+# (needed when Secrets are created with kubectl before installing, as in production).
+namespaces:
+  create: true
+  store: store
+  mcpServers: mcp-servers
+  gateway: gateway
+
+secrets:
+  # true:  the chart generates random values on first install and REUSES them on every
+  #        upgrade (it looks up the existing Secret), so passwords never change by accident.
+  # false: the Secrets must already exist (create them with k8s/create-secrets.sh or
+  #        kubectl create secret). Same names and keys either way.
+  generate: true
+
+ingress:
+  className: traefik
+  tls:
+    enabled: false
+    clusterIssuer: ""         # cert-manager ClusterIssuer, e.g. letsencrypt-prod
+  # Where the ingress controller pods run, so NetworkPolicies can let them in.
+  controller:
+    namespace: kube-system
+    podLabels:
+      app.kubernetes.io/name: traefik
+
+networkPolicies:
+  enabled: true
+  dns:                         # cluster DNS, the only egress every pod gets by default
+    namespace: kube-system
+    podLabels:
+      k8s-app: kube-dns
+
+store:
+  host: store.localtest.me
+  title: Demo Store
+  timezone: Asia/Kolkata
+  country: "IN:MH"
+  currency: INR
+  wooCommerceVersion: "11.2.1"
+  adminUser: admin
+  adminEmail: admin@store.localtest.me
+  mysql:
+    image: mysql:8.4
+    storage: 2Gi
+    resources:
+      requests: { cpu: 100m, memory: 512Mi }
+      limits: { cpu: "1", memory: 1Gi }
+  wordpress:
+    image: wordpress:7.1-apache
+    storage: 2Gi
+    resources:
+      requests: { cpu: 100m, memory: 256Mi }
+      limits: { cpu: "1", memory: 512Mi }
+  setup:
+    image: wordpress:cli-2.12-php8.3
+    resources:
+      requests: { cpu: 100m, memory: 128Mi }
+      limits: { cpu: "1", memory: 512Mi }
+
+mcp:
+  woocommerce:
+    image: { repository: mcp-woocommerce, tag: "0.1.1" }
+    resources:
+      requests: { cpu: 25m, memory: 64Mi }
+      limits: { cpu: 250m, memory: 128Mi }
+  notes:
+    enabled: true
+    image: { repository: mcp-notes, tag: "0.1.1" }
+    storage: 100Mi
+    resources:
+      requests: { cpu: 25m, memory: 64Mi }
+      limits: { cpu: 250m, memory: 128Mi }
+  toolbox:
+    enabled: true
+    image: { repository: mcp-toolbox, tag: "0.1.1" }
+    resources:
+      requests: { cpu: 25m, memory: 64Mi }
+      limits: { cpu: 250m, memory: 128Mi }
+
+gateway:
+  host: dashboard.localtest.me
+  adminEmail: admin@example.com     # first admin; its password is generated into a Secret
+  replicas: 1
+  image: { repository: mcp-gateway, tag: "0.3.0" }
+  refreshIntervalMs: 10000
+  seedServers: true                 # register woo / notes / toolbox on first start
+  resources:
+    requests: { cpu: 50m, memory: 96Mi }
+    limits: { cpu: 500m, memory: 256Mi }
+  ssrf:
+    # Namespaces whose Services may be registered as upstreams (besides public URLs).
+    # Empty = the chart's own store and mcp-servers namespaces.
+    allowedNamespaces: []
+    allowPrivateNetworks: false
+  llm:
+    baseUrl: ""                     # OpenAI-compatible API. "" = chat disabled
+    model: ""
+    reasoningEffort: ""             # "none" turns off qwen3 thinking (local Ollama)
+    timeoutMs: 120000
+    # API key for a cloud LLM: the NAME of a Secret you create yourself, never the key:
+    #   kubectl -n gateway create secret generic llm-api-key --from-literal=api-key=...
+    existingSecret: ""
+    existingSecretKey: api-key
+  # Extra egress the gateway needs beyond DNS, Postgres and the upstreams (e.g. a local LLM).
+  # Each item is a NetworkPolicy egress rule.
+  extraEgress: []
+  postgres:
+    image: postgres:17-alpine
+    storage: 1Gi
+    resources:
+      requests: { cpu: 50m, memory: 128Mi }
+      limits: { cpu: 500m, memory: 512Mi }
+
+dashboard:
+  image: { repository: mcp-dashboard, tag: "0.1.0" }
+  resources:
+    requests: { cpu: 10m, memory: 16Mi }
+    limits: { cpu: 200m, memory: 64Mi }

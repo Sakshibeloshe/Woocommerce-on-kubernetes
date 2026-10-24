@@ -1,0 +1,8 @@
+apiVersion: v2
+name: platform
+description: >
+  WooCommerce hosting with a team MCP gateway: the store (WordPress + MySQL), a
+  WooCommerce MCP server, two extra MCP servers, the gateway backend and the dashboard.
+type: application
+version: 0.1.0          # version of this chart
+appVersion: "0.3.0"     # version of the gateway application

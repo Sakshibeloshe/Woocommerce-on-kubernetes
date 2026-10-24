@@ -1,6 +1,6 @@
-# One-off Job that configures the store with WP-CLI (k8s/store/setup/setup.sh).
+# One-off Job that configures the store with WP-CLI (charts/platform/files/store-setup/setup.sh).
 # The scripts reach the pod through a ConfigMap, created from the real files:
-#   kubectl -n store create configmap store-setup-scripts --from-file=k8s/store/setup/ \
+#   kubectl -n store create configmap store-setup-scripts --from-file=charts/platform/files/store-setup/ \
 #     --dry-run=client -o yaml | kubectl apply -f -
 # A Job can't be edited after it ran; to re-run it: delete it, then apply again.
 apiVersion: batch/v1

@@ -1,0 +1,21 @@
+# Local: k3d on a laptop. Install:
+#   helm install platform charts/platform -f charts/platform/values-local.yaml --timeout 15m
+# *.localtest.me resolves to 127.0.0.1, so no hosts-file editing is needed.
+
+store:
+  host: store.localtest.me
+
+gateway:
+  host: dashboard.localtest.me
+  llm:
+    # Ollama on the host PC. Docker Desktop makes the host reachable as host.docker.internal.
+    baseUrl: http://host.docker.internal:11434/v1
+    model: qwen3:8b
+    reasoningEffort: "none"
+    timeoutMs: 300000              # a local model on a laptop GPU is slow
+  extraEgress:
+    # host.docker.internal = 192.168.65.254 on Docker Desktop; allow only Ollama's port.
+    - to:
+        - ipBlock: { cidr: 192.168.65.0/24 }
+      ports:
+        - { port: 11434, protocol: TCP }

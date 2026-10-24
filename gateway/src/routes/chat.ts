@@ -6,6 +6,7 @@ import { config } from "../config.js";
 import { requireSession } from "../auth.js";
 import { ah, parseBody } from "../http.js";
 import { runChat } from "../chat.js";
+import { chatLimiter } from "../ratelimit.js";
 
 export const chatRouter = Router();
 chatRouter.use(requireSession);
@@ -21,7 +22,7 @@ chatRouter.get("/config", (_req, res) => {
   res.json({ enabled: !!config.llm.baseUrl, model: config.llm.model });
 });
 
-chatRouter.post("/", ah(async (req, res) => {
+chatRouter.post("/", chatLimiter, ah(async (req, res) => {
   if (!config.llm.baseUrl) return res.status(503).json({ error: "Chat is not configured (LLM_BASE_URL is empty)" });
   const b = parseBody(body, req, res);
   if (!b) return;

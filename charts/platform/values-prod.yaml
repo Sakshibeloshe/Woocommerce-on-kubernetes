@@ -1,0 +1,54 @@
+# Production-like: k3s on a VPS. Only VALUES change compared to local; no template does.
+#   helm upgrade --install platform charts/platform -f charts/platform/values-prod.yaml --timeout 15m
+# Replace "203.0.113.10" with your VPS IP (nip.io turns any IP into a DNS name),
+# or set real domains whose DNS A records point at the VPS.
+
+global:
+  storageClass: local-path          # k3s' built-in provisioner (explicit, not "whatever is default")
+  imageRegistry: ghcr.io/YOUR_GITHUB_USER   # images pushed by CI or by hand (see docs/vps.md)
+  imagePullPolicy: IfNotPresent
+
+# Namespaces and Secrets are created BEFORE install with k8s/create-secrets.sh
+# (or kubectl create secret ...), so no generated secret ever passes through Helm.
+namespaces:
+  create: false
+secrets:
+  generate: false
+
+ingress:
+  className: traefik                 # k3s ships Traefik too
+  tls:
+    enabled: true
+    clusterIssuer: letsencrypt-prod  # cert-manager, see docs/vps.md
+
+store:
+  host: store.203.0.113.10.nip.io
+  adminEmail: admin@store.example.com
+  mysql:
+    storage: 10Gi
+  wordpress:
+    storage: 10Gi
+    resources:
+      requests: { cpu: 200m, memory: 384Mi }
+      limits: { cpu: "1", memory: 768Mi }
+
+gateway:
+  host: dashboard.203.0.113.10.nip.io
+  adminEmail: admin@example.com
+  replicas: 2                        # stateless /mcp: any replica can serve any request
+  llm:
+    baseUrl: https://api.groq.com/openai/v1
+    model: llama-3.3-70b-versatile
+    timeoutMs: 60000
+    existingSecret: llm-api-key      # kubectl -n gateway create secret generic llm-api-key --from-literal=api-key=gsk_...
+  extraEgress:
+    # The cloud LLM (and any public MCP servers an admin adds) over HTTPS.
+    # Private and metadata ranges stay closed.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16, 100.64.0.0/10]
+      ports:
+        - { port: 443, protocol: TCP }
+  postgres:
+    storage: 5Gi

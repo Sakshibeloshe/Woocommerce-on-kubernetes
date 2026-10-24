@@ -11,6 +11,7 @@ import { keysRouter } from "./routes/keys.js";
 import { serversRouter } from "./routes/servers.js";
 import { auditRouter } from "./routes/audit.js";
 import { chatRouter } from "./routes/chat.js";
+import { loginLimiter, mcpAuthFailureLimiter, mcpPerKeyLimiter } from "./ratelimit.js";
 
 await waitForDb();
 await migrate();
@@ -35,7 +36,9 @@ app.get("/readyz", async (_req, res) => {
   }
 });
 
-app.use("/mcp", mcpRouter);                 // MCP clients (API key)
+app.use("/mcp", mcpAuthFailureLimiter, mcpPerKeyLimiter, mcpRouter);   // MCP clients (API key)
+app.use("/api/auth/login", loginLimiter);
+app.use("/api/auth/accept-invite", loginLimiter);
 app.use("/api/auth", authRouter);           // dashboard (session cookie) ...
 app.use("/api/users", usersRouter);
 app.use("/api/keys", keysRouter);

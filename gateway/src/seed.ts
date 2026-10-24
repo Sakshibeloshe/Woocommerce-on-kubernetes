@@ -12,6 +12,7 @@ export async function bootstrapAdmin() {
   const { rows } = await pool.query(
     `INSERT INTO users (email, name, role, password_hash)
      SELECT $1, 'Admin', 'admin', $2 WHERE NOT EXISTS (SELECT 1 FROM users)
+     ON CONFLICT (email) DO NOTHING          -- two replicas starting at once
      RETURNING email`,
     [email.toLowerCase(), await hashPassword(password)]
   );

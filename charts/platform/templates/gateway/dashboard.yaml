@@ -1,0 +1,81 @@
+{{- $ns := .Values.namespaces.gateway -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dashboard
+  namespace: {{ $ns }}
+  labels: {{- include "platform.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: dashboard }
+  template:
+    metadata:
+      labels: { app: dashboard }
+    spec:
+      {{- include "platform.podDefaults" . | nindent 6 }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101                  # nginx-unprivileged's user
+      containers:
+        - name: nginx
+          image: {{ include "platform.image" (list .Values.dashboard.image $) }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - containerPort: 8080
+          {{- include "platform.containerSecurity" . | nindent 10 }}
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }    # nginx pid + temp files
+          resources: {{- toYaml .Values.dashboard.resources | nindent 12 }}
+          readinessProbe:
+            httpGet: { path: /healthz, port: 8080 }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /healthz, port: 8080 }
+            periodSeconds: 20
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dashboard
+  namespace: {{ $ns }}
+  labels: {{- include "platform.labels" . | nindent 4 }}
+spec:
+  selector: { app: dashboard }
+  ports:
+    - { port: 80, targetPort: 8080 }
+---
+# One public host: /mcp and /api -> gateway, everything else -> dashboard (longest path wins).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gateway
+  namespace: {{ $ns }}
+  labels: {{- include "platform.labels" . | nindent 4 }}
+  {{- if and .Values.ingress.tls.enabled .Values.ingress.tls.clusterIssuer }}
+  annotations:
+    cert-manager.io/cluster-issuer: {{ .Values.ingress.tls.clusterIssuer }}
+  {{- end }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- if .Values.ingress.tls.enabled }}
+  tls:
+    - hosts: [{{ .Values.gateway.host | quote }}]
+      secretName: dashboard-tls
+  {{- end }}
+  rules:
+    - host: {{ .Values.gateway.host | quote }}
+      http:
+        paths:
+          - path: /mcp
+            pathType: Prefix
+            backend: { service: { name: gateway, port: { number: 80 } } }
+          - path: /api
+            pathType: Prefix
+            backend: { service: { name: gateway, port: { number: 80 } } }
+          - path: /
+            pathType: Prefix
+            backend: { service: { name: dashboard, port: { number: 80 } } }

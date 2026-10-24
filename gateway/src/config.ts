@@ -8,9 +8,11 @@ function required(name: string): string {
   return v;
 }
 
-const encryptionKey = Buffer.from(required("ENCRYPTION_KEY"), "hex");
+// 32 random bytes, as 64 hex characters (kubectl script) or base64 (Helm's randBytes).
+const rawKey = required("ENCRYPTION_KEY");
+const encryptionKey = Buffer.from(rawKey, /^[0-9a-f]{64}$/i.test(rawKey) ? "hex" : "base64");
 if (encryptionKey.length !== 32) {
-  throw new Error("ENCRYPTION_KEY must be 32 bytes, hex-encoded (64 hex characters)");
+  throw new Error("ENCRYPTION_KEY must be 32 bytes, hex (64 chars) or base64 encoded");
 }
 
 const sessionSecret = required("SESSION_SECRET");
@@ -39,6 +41,12 @@ export const config = {
   },
   // How often every upstream is re-checked (status + tool list).
   refreshIntervalMs: Number(process.env.UPSTREAM_REFRESH_INTERVAL_MS ?? 15_000),
+
+  // SSRF policy for upstream URLs (see ssrf.ts).
+  ssrf: {
+    allowedNamespaces: (process.env.SSRF_ALLOWED_NAMESPACES ?? "").split(",").map((s) => s.trim()).filter(Boolean),
+    allowPrivateNetworks: process.env.SSRF_ALLOW_PRIVATE_NETWORKS === "true",
+  },
 
   // Chat agent: any OpenAI-compatible chat completions API.
   //   Ollama: http://host.docker.internal:11434/v1   Groq: https://api.groq.com/openai/v1

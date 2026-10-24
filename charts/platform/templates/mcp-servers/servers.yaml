@@ -1,0 +1,137 @@
+{{- $ns := .Values.namespaces.mcpServers -}}
+{{- if .Values.mcp.notes.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: notes-data
+  namespace: {{ $ns }}
+  labels: {{- include "platform.labels" . | nindent 4 }}
+spec:
+  accessModes: [ReadWriteOnce]
+  {{- include "platform.storageClass" . | nindent 2 }}
+  resources:
+    requests:
+      storage: {{ .Values.mcp.notes.storage }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp-notes
+  namespace: {{ $ns }}
+  labels: {{- include "platform.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector:
+    matchLabels: { app: mcp-notes }
+  template:
+    metadata:
+      labels: { app: mcp-notes }
+    spec:
+      {{- include "platform.podDefaults" . | nindent 6 }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+        - name: mcp
+          image: {{ include "platform.image" (list .Values.mcp.notes.image $) }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - containerPort: 3000
+          env:
+            - name: NOTES_API_TOKEN
+              valueFrom: { secretKeyRef: { name: notes-auth, key: token } }
+            - { name: NOTES_FILE, value: /data/notes.json }
+          {{- include "platform.containerSecurity" . | nindent 10 }}
+          volumeMounts:
+            - { name: data, mountPath: /data }
+          resources: {{- toYaml .Values.mcp.notes.resources | nindent 12 }}
+          readinessProbe:
+            httpGet: { path: /healthz, port: 3000 }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /healthz, port: 3000 }
+            initialDelaySeconds: 5
+            periodSeconds: 20
+      volumes:
+        - name: data
+          persistentVolumeClaim: { claimName: notes-data }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp-notes
+  namespace: {{ $ns }}
+  labels: {{- include "platform.labels" . | nindent 4 }}
+spec:
+  selector: { app: mcp-notes }
+  ports:
+    - { port: 80, targetPort: 3000 }
+{{- end }}
+{{- if .Values.mcp.toolbox.enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp-toolbox
+  namespace: {{ $ns }}
+  labels: {{- include "platform.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: mcp-toolbox }
+  template:
+    metadata:
+      labels: { app: mcp-toolbox }
+    spec:
+      {{- include "platform.podDefaults" . | nindent 6 }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+        - name: mcp
+          image: {{ include "platform.image" (list .Values.mcp.toolbox.image $) }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - containerPort: 3000
+          {{- include "platform.containerSecurity" . | nindent 10 }}
+          resources: {{- toYaml .Values.mcp.toolbox.resources | nindent 12 }}
+          readinessProbe:
+            httpGet: { path: /healthz, port: 3000 }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /healthz, port: 3000 }
+            initialDelaySeconds: 5
+            periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp-toolbox
+  namespace: {{ $ns }}
+  labels: {{- include "platform.labels" . | nindent 4 }}
+spec:
+  selector: { app: mcp-toolbox }
+  ports:
+    - { port: 80, targetPort: 3000 }
+{{- end }}
+{{- if .Values.networkPolicies.enabled }}
+---
+{{ include "platform.namespaceBaseline" (list . $ns) }}
+---
+# Every MCP server here: in ONLY from gateway pods; no egress beyond DNS.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: from-gateway-only
+  namespace: {{ $ns }}
+  labels: {{- include "platform.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        {{- include "platform.fromGateway" . | nindent 8 }}
+      ports: [{ port: 3000, protocol: TCP }]
+{{- end }}

@@ -13,6 +13,7 @@ import { createHash } from "node:crypto";
 import { config } from "./config.js";
 import { pool } from "./db.js";
 import { decrypt } from "./crypto.js";
+import { guardedFetch } from "./ssrf.js";
 
 export type Status = "connected" | "unreachable" | "disabled";
 
@@ -159,6 +160,7 @@ class UpstreamManager {
   private async connect(state: UpstreamState): Promise<Client> {
     const transport = new StreamableHTTPClientTransport(new URL(state.row.url), {
       requestInit: { headers: this.upstreamHeaders(state.row) },
+      fetch: guardedFetch,   // SSRF check on the real IP of every connection and redirect
       // Don't keep retrying a broken server-to-client stream in the background;
       // the periodic refresh decides when to reconnect.
       reconnectionOptions: { maxRetries: 0, initialReconnectionDelay: 1000, maxReconnectionDelay: 1000, reconnectionDelayGrowFactor: 1 },

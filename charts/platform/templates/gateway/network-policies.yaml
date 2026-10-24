@@ -1,0 +1,62 @@
+{{- if .Values.networkPolicies.enabled }}
+{{- $ns := .Values.namespaces.gateway -}}
+{{ include "platform.namespaceBaseline" (list . $ns) }}
+---
+# Dashboard: in from the ingress controller only; it calls nothing itself.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: dashboard
+  namespace: {{ $ns }}
+  labels: {{- include "platform.labels" . | nindent 4 }}
+spec:
+  podSelector: { matchLabels: { app: dashboard } }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        {{- include "platform.fromIngressController" . | nindent 8 }}
+      ports: [{ port: 8080, protocol: TCP }]
+---
+# Gateway: in from the ingress controller; out to Postgres, the upstream MCP servers,
+# and whatever extraEgress allows (the LLM). Everything else, e.g. the cloud metadata
+# service or the Kubernetes API, is denied at the network level too (defense in depth
+# behind the SSRF guard in the code).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: gateway
+  namespace: {{ $ns }}
+  labels: {{- include "platform.labels" . | nindent 4 }}
+spec:
+  podSelector: { matchLabels: { app: gateway } }
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        {{- include "platform.fromIngressController" . | nindent 8 }}
+      ports: [{ port: 8080, protocol: TCP }]
+  egress:
+    - to: [{ podSelector: { matchLabels: { app: postgres } } }]
+      ports: [{ port: 5432, protocol: TCP }]
+    - to:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: {{ .Values.namespaces.store }} } }
+          podSelector: { matchLabels: { app: mcp-woocommerce } }
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: {{ .Values.namespaces.mcpServers }} } }
+      ports: [{ port: 3000, protocol: TCP }]
+    {{- with .Values.gateway.extraEgress }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+---
+# Postgres: only the gateway may connect.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: postgres
+  namespace: {{ $ns }}
+  labels: {{- include "platform.labels" . | nindent 4 }}
+spec:
+  podSelector: { matchLabels: { app: postgres } }
+  policyTypes: [Ingress]
+  ingress:
+    - from: [{ podSelector: { matchLabels: { app: gateway } } }]
+      ports: [{ port: 5432, protocol: TCP }]
+{{- end }}
