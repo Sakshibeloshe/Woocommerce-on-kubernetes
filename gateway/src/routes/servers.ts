@@ -15,7 +15,8 @@ serversRouter.use(requireSession);
 
 // Slugs become tool prefixes. Lowercase letters/digits with single hyphens, so they
 // can never contain the "__" separator: "woo__list_orders" always splits unambiguously.
-const slug = z.string().regex(/^[a-z][a-z0-9]*(-[a-z0-9]+)*$/, "lowercase letters, digits and single hyphens").max(24);
+const slug = z.string().regex(/^[a-z][a-z0-9]*(-[a-z0-9]+)*$/, "lowercase letters, digits and single hyphens").max(24)
+  .refine((value) => !value.startsWith("store-"), 'the "store-" prefix is reserved for provisioned stores');
 const url = z.string().url().refine((u) => /^https?:\/\//.test(u), "must be http(s)");
 // Headers the gateway itself controls must not be overridden by a credential.
 const FORBIDDEN_HEADERS = ["host", "content-length", "content-type", "accept", "connection", "transfer-encoding", "mcp-session-id", "mcp-protocol-version"];

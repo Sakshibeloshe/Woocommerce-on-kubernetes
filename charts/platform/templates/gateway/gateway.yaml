@@ -73,6 +73,8 @@ spec:
             - { name: UPSTREAM_REFRESH_INTERVAL_MS, value: {{ .Values.gateway.refreshIntervalMs | quote }} }
             - { name: SSRF_ALLOWED_NAMESPACES, value: {{ join "," $allowed | quote }} }
             - { name: SSRF_ALLOW_PRIVATE_NETWORKS, value: {{ .Values.gateway.ssrf.allowPrivateNetworks | quote }} }
+            - { name: STORE_HOST_SUFFIX, value: {{ trimPrefix "dashboard." .Values.gateway.host | quote }} }
+            - { name: STORES_MAX_PER_USER, value: {{ .Values.gateway.stores.maxPerUser | quote }} }
             - { name: LLM_BASE_URL, value: {{ .Values.gateway.llm.baseUrl | quote }} }
             - { name: LLM_MODEL, value: {{ .Values.gateway.llm.model | quote }} }
             - { name: LLM_REASONING_EFFORT, value: {{ .Values.gateway.llm.reasoningEffort | quote }} }

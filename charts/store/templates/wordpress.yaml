@@ -1,0 +1,99 @@
+{{- $ns := .Release.Namespace -}}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: wordpress-data
+  namespace: {{ $ns }}
+  labels: {{- include "platform.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/resource-policy: keep       # store content survives "helm uninstall"
+spec:
+  accessModes: [ReadWriteOnce]
+  {{- include "platform.storageClass" . | nindent 2 }}
+  resources:
+    requests:
+      storage: {{ .Values.store.wordpress.storage }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wordpress
+  namespace: {{ $ns }}
+  labels: {{- include "platform.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate                      # the RWO volume can't be shared by old + new pod
+  selector:
+    matchLabels: { app: wordpress }
+  template:
+    metadata:
+      labels: { app: wordpress }
+    spec:
+      {{- include "platform.podDefaults" . | nindent 6 }}
+      # Known exception to "non-root": the official image starts Apache as root to bind
+      # port 80 and copy files, then serves requests as www-data (uid 33).
+      containers:
+        - name: wordpress
+          image: {{ .Values.store.wordpress.image }}
+          ports:
+            - containerPort: 80
+          env:
+            - { name: WORDPRESS_DB_HOST, value: mysql }
+            - { name: WORDPRESS_DB_NAME, value: wordpress }
+            - { name: WORDPRESS_DB_USER, value: wordpress }
+            - name: WORDPRESS_DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: mysql-credentials, key: password } }
+          securityContext:
+            allowPrivilegeEscalation: false
+          volumeMounts:
+            - { name: data, mountPath: /var/www/html }
+          resources: {{- toYaml .Values.store.wordpress.resources | nindent 12 }}
+          readinessProbe:                 # PHP works AND the database answers
+            httpGet: { path: /wp-login.php, port: 80 }
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:                  # Apache accepts connections (not tied to the DB)
+            tcpSocket: { port: 80 }
+            initialDelaySeconds: 30
+            periodSeconds: 20
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: wordpress-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: wordpress
+  namespace: {{ $ns }}
+  labels: {{- include "platform.labels" . | nindent 4 }}
+spec:
+  selector: { app: wordpress }
+  ports:
+    - { port: 80, targetPort: 80 }
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: storefront
+  namespace: {{ $ns }}
+  labels: {{- include "platform.labels" . | nindent 4 }}
+  {{- if and .Values.ingress.tls.enabled .Values.ingress.tls.clusterIssuer }}
+  annotations:
+    cert-manager.io/cluster-issuer: {{ .Values.ingress.tls.clusterIssuer }}
+  {{- end }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- if .Values.ingress.tls.enabled }}
+  tls:
+    - hosts: [{{ .Values.store.host | quote }}]
+      secretName: storefront-tls
+  {{- end }}
+  rules:
+    - host: {{ .Values.store.host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend: { service: { name: wordpress, port: { number: 80 } } }

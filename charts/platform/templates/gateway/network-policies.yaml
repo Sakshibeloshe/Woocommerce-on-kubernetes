@@ -38,7 +38,7 @@ spec:
     - to: [{ podSelector: { matchLabels: { app: postgres } } }]
       ports: [{ port: 5432, protocol: TCP }]
     - to:
-        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: {{ .Values.namespaces.store }} } }
+        - namespaceSelector: { matchLabels: { platform.example/store: "true" } }
           podSelector: { matchLabels: { app: mcp-woocommerce } }
         - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: {{ .Values.namespaces.mcpServers }} } }
       ports: [{ port: 3000, protocol: TCP }]
@@ -57,6 +57,7 @@ spec:
   podSelector: { matchLabels: { app: postgres } }
   policyTypes: [Ingress]
   ingress:
-    - from: [{ podSelector: { matchLabels: { app: gateway } } }]
+    - from:
+        - podSelector: { matchLabels: { app: gateway } }
       ports: [{ port: 5432, protocol: TCP }]
 {{- end }}

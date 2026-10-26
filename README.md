@@ -33,7 +33,8 @@ differ only in values files.
 
 | Component | Folder | What it does |
 |---|---|---|
-| Store | `charts/platform/templates/store` | WordPress + WooCommerce + MySQL on persistent volumes; configured automatically by a WP-CLI Job (Helm hook) |
+| Base store | `charts/platform/templates/store` | WordPress + WooCommerce + MySQL on persistent volumes; configured automatically by a WP-CLI Job (Helm hook) |
+| Additional stores | `charts/store/` | Reusable per-store chart for isolated namespaces and independent data volumes |
 | WooCommerce MCP server | `mcp-woocommerce/` | **Written for this project.** Streamable HTTP; product and order tools, plus rule-based GEO readiness assessments for published product listings |
 | Notes MCP server | `mcp-notes/` | Shared team notes (`create_note`, `list_notes`, `delete_note`); **requires a bearer token**, to demonstrate upstream credentials |
 | Toolbox MCP server | `mcp-toolbox/` | `convert_currency`, `get_current_time`, `calculate` |
@@ -50,7 +51,7 @@ the Helm chart is the supported install.
 
 ### Prerequisites
 - **Docker Desktop** (running)
-- **k3d**, **kubectl**, **Helm** (Windows: `winget install k3d.k3d Helm.Helm`; kubectl comes with Docker Desktop)
+- **k3d**, **kubectl**, **Helm**, **Python 3** (Windows: `winget install k3d.k3d Helm.Helm`; kubectl comes with Docker Desktop)
 - **Git Bash** on Windows (the scripts are bash; PowerShell's `bash` command is WSL, which has no kubectl)
 - Optional, for the chat agent: **Ollama** with a tool-calling model: `ollama pull qwen3:8b`
 
@@ -120,6 +121,56 @@ and a preview of agent-readable facts built from existing WooCommerce fields; mi
 is left empty rather than guessed. Assessments are routed through the WooCommerce MCP server and
 recorded in the gateway audit log. This is a listing-completeness diagnostic, not a promise of
 ranking or citations in any particular AI system. The GEO page does not require an LLM API key.
+
+### Multiple isolated stores (manual operator workflow)
+
+The **Stores** page lets a user request an isolated WooCommerce store. Each store gets its own
+Kubernetes namespace, Helm release, MySQL database and volume claims, hostname, Secret, and
+gateway tool prefix. Store creation is deliberately split: the gateway does not hold a Kubernetes
+token or have namespace-creation privileges. A cluster operator performs Kubernetes steps with
+their own trusted kubeconfig.
+
+1. In **Dashboard → Stores**, create a store with a globally unique slug. The page shows its
+   assigned namespace, hostname, and operator commands. Fill in both the store name and slug, then
+   select **Create store**. On Windows, an admin runs the PowerShell
+   preparation command from the repository root, for example:
+   ```powershell
+   .\scripts\prepare-store-namespace.ps1 -Namespace 'store-blue-shop-1234abcd'
+   ```
+   Git Bash and macOS/Linux can use:
+   ```bash
+   bash scripts/prepare-store-namespace.sh store-blue-shop-1234abcd
+   ```
+2. After the namespace has the `platform.example/store=true` label, an admin clicks **Start Helm
+   install** and runs the displayed command. For a production cluster, use its values file so the
+   registry, storage class, and other production settings match the base release:
+   ```powershell
+   .\scripts\provision-store.ps1 -Namespace 'store-blue-shop-1234abcd' `
+     -Hostname 'store-blue-shop.example.com' -Title 'Blue Shop' `
+     -ValuesFile 'charts/platform/values-prod.yaml'
+   ```
+   Git Bash and macOS/Linux can use:
+   ```bash
+   STORE_VALUES_FILE=charts/platform/values-prod.yaml \
+     bash scripts/provision-store.sh store-blue-shop-1234abcd store-blue-shop.example.com 'Blue Shop'
+   ```
+3. When Helm succeeds, click **Register / retry MCP**. The gateway checks the service endpoint,
+   adds it as an upstream, and exposes tools as `store-<slug>__<tool>`.
+4. To remove a store, use **Remove store**. This immediately unregisters its gateway tools. An
+   admin then runs the displayed PowerShell script (or the `.sh` equivalent on Git Bash/Linux).
+   For example:
+   ```powershell
+   .\scripts\delete-store-namespace.ps1 -Namespace 'store-blue-shop-1234abcd'
+   ```
+   This deletes the namespace, including its database, Secrets, and PVCs. Then click
+   **Confirm namespace deleted**. The storage class's reclaim policy determines whether the
+   backing storage is permanently deleted or retained after its PVC is removed. The dashboard's
+   **Deleted** status tracks the app record; it cannot verify Kubernetes state. If a namespace is
+   still present, the deleted store card shows a `kubectl get namespace` check and a cleanup command.
+
+The platform Helm chart grants no Kubernetes API access to the gateway. Store namespace setup,
+installation, and deletion are explicit operator actions; the dashboard tracks the workflow and
+manages gateway registration.
 
 ### Connect an external MCP client
 Generate a key under **My API keys**, then use only the gateway URL and the key.
@@ -204,17 +255,19 @@ Upgrades: bump an image tag in values → `helm upgrade`. Rollback: `helm histor
 | 9. Upgrades and rollback | Done and documented: pinned image tags, idempotent setup hook, `helm history` / `rollback` | `docs/vps.md` |
 | 1. VPS deployment | Documented and configured, see `docs/vps.md` | `values-prod.yaml` |
 | 8. Observability | Partial: per-server status with the reason it's unreachable; failure reasons in the audit log. No metrics endpoint | Servers page, Audit page |
-| 2. Tool permissions, 3. OAuth, 4. Many tools, 5. Hosted servers, multi-store bonus | Not attempted | |
+| Multi-store bonus | Implemented with an operator-driven namespace workflow; each store uses `charts/store/`, while the gateway stays tokenless | `gateway/src/routes/stores.ts`, `dashboard/src/pages/Stores.tsx`, `scripts/*store*.sh` |
+| 2. Tool permissions, 3. OAuth, 4. Many tools, 5. Hosted servers | Not attempted | |
 
 ## Repository layout
 ```
-charts/platform/     Helm chart (templates, values, store setup scripts)
+charts/platform/     Platform Helm chart (templates, values, base store setup)
+charts/store/        Reusable Helm chart for additional isolated stores
 gateway/             gateway backend + chat agent (TypeScript, Express, MCP SDK)
 dashboard/           React dashboard (Vite), served by nginx
 mcp-woocommerce/     WooCommerce MCP server
 mcp-notes/           notes MCP server (bearer token)
 mcp-toolbox/         toolbox MCP server
-scripts/             local-up.sh, test-hardening.sh
+scripts/             local-up.sh, test-hardening.sh, per-store PowerShell and Bash scripts
 k8s/                 k3d cluster config, create-secrets.sh, test-gateway.sh, plain manifests (learning path)
 woo-sandbox/         Docker Compose sandbox used to learn WooCommerce before Kubernetes
 docs/                system design, threat model and VPS runbook

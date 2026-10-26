@@ -29,6 +29,24 @@ CREATE TABLE IF NOT EXISTS api_keys (
   revoked_at    timestamptz                -- revocation is a flag (timestamp), the row stays for the audit trail
 );
 
+CREATE TABLE IF NOT EXISTS stores (
+  id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  owner_user_id  uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  slug           text NOT NULL UNIQUE,
+  title          text NOT NULL,
+  namespace      text NOT NULL UNIQUE,
+  release_name   text NOT NULL UNIQUE,
+  hostname       text NOT NULL UNIQUE,
+  status         text NOT NULL CHECK (status IN ('waiting_for_namespace', 'provisioning', 'ready', 'failed', 'cleanup_pending', 'deleted')),
+  last_error     text,
+  created_at     timestamptz NOT NULL DEFAULT now(),
+  updated_at     timestamptz NOT NULL DEFAULT now(),
+  deleted_at     timestamptz
+);
+CREATE INDEX IF NOT EXISTS stores_owner_idx ON stores (owner_user_id, created_at DESC);
+ALTER TABLE stores DROP CONSTRAINT IF EXISTS stores_status_check;
+ALTER TABLE stores ADD CONSTRAINT stores_status_check CHECK (status IN ('waiting_for_namespace', 'provisioning', 'ready', 'failed', 'cleanup_pending', 'deleted'));
+
 CREATE TABLE IF NOT EXISTS upstream_servers (
   id                    uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   slug                  text NOT NULL UNIQUE,   -- tool prefix: <slug>__<tool>
@@ -38,9 +56,14 @@ CREATE TABLE IF NOT EXISTS upstream_servers (
   credential_type       text NOT NULL DEFAULT 'none' CHECK (credential_type IN ('none', 'bearer', 'header')),
   credential_header     text,                   -- header name when credential_type = 'header'
   credential_encrypted  text,                   -- AES-256-GCM, never returned by the API
+  store_id              uuid REFERENCES stores(id) ON DELETE CASCADE,
   created_at            timestamptz NOT NULL DEFAULT now(),
   updated_at            timestamptz NOT NULL DEFAULT now()
 );
+ALTER TABLE upstream_servers ADD COLUMN IF NOT EXISTS store_id uuid REFERENCES stores(id) ON DELETE CASCADE;
+ALTER TABLE upstream_servers DROP CONSTRAINT IF EXISTS upstream_servers_store_id_fkey;
+ALTER TABLE upstream_servers ADD CONSTRAINT upstream_servers_store_id_fkey FOREIGN KEY (store_id) REFERENCES stores(id) ON DELETE CASCADE;
+CREATE UNIQUE INDEX IF NOT EXISTS upstream_servers_store_id_idx ON upstream_servers (store_id) WHERE store_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS audit_log (
   id           bigserial PRIMARY KEY,

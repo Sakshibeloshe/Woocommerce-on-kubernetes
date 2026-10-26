@@ -36,6 +36,13 @@ export type ChatStep = { tool: string; arguments: unknown; ok: boolean; result: 
 export type GeoCheck = { key: string; label: string; weight: number; passed: boolean; detail: string; recommendation?: string }
 export type GeoProduct = { id: number; name: string; permalink: string | null; status: string; score: number; checks: GeoCheck[]; structured_record: Record<string, unknown>; recommendations: string[] }
 export type GeoReport = { assessed: number; average_score: number; scoring: string; products: GeoProduct[] }
+export type Store = {
+  id: string; slug: string; title: string; namespace: string; hostname: string
+  release_name: string
+  status: 'waiting_for_namespace' | 'provisioning' | 'ready' | 'failed' | 'cleanup_pending' | 'deleted'
+  last_error: string | null; owner_email: string
+  created_at: string; updated_at: string
+}
 
 export class ApiError extends Error {
   status: number
@@ -91,6 +98,12 @@ export const api = {
   chatConfig: () => request<{ enabled: boolean; model: string }>('GET', '/api/chat/config'),
   chat: (messages: ChatTurn[]) => request<{ reply: string; steps: ChatStep[] }>('POST', '/api/chat', { messages }),
   geo: (search = '', per_page = 50) => request<GeoReport>('GET', `/api/geo?${new URLSearchParams({ ...(search && { search }), per_page: String(per_page) })}`),
+  stores: () => request<{ stores: Store[]; max_per_user: number }>('GET', '/api/stores'),
+  createStore: (s: { slug: string; title: string }) => request<{ store: Store }>('POST', '/api/stores', s),
+  provisionStore: (id: string) => request<{ store: Store }>('POST', `/api/stores/${id}/provision`),
+  registerStore: (id: string) => request<{ store: Store }>('POST', `/api/stores/${id}/register`),
+  deleteStore: (id: string) => request<{ store: Store }>('DELETE', `/api/stores/${id}`),
+  confirmStoreNamespaceDeleted: (id: string) => request<{ ok: boolean }>('POST', `/api/stores/${id}/confirm-namespace-deleted`),
 }
 
 export const timeAgo = (iso: string | null) => {

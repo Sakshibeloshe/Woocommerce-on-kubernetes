@@ -6,6 +6,9 @@ kind: Namespace
 metadata:
   name: {{ $ns }}
   labels: {{- include "platform.labels" $ | nindent 4 }}
+    {{ if eq $ns $.Values.namespaces.store }}
+    platform.example/store: "true"
+    {{ end }}
   annotations:
     # Keep the namespace (and its volumes) if the release is uninstalled by mistake.
     helm.sh/resource-policy: keep

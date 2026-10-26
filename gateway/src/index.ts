@@ -12,6 +12,7 @@ import { serversRouter } from "./routes/servers.js";
 import { auditRouter } from "./routes/audit.js";
 import { chatRouter } from "./routes/chat.js";
 import { geoRouter } from "./routes/geo.js";
+import { storesRouter } from "./routes/stores.js";
 import { loginLimiter, mcpAuthFailureLimiter, mcpPerKeyLimiter } from "./ratelimit.js";
 
 await waitForDb();
@@ -47,6 +48,7 @@ app.use("/api/servers", serversRouter);
 app.use("/api/audit", auditRouter);
 app.use("/api/chat", chatRouter);
 app.use("/api/geo", geoRouter);
+app.use("/api/stores", storesRouter);
 
 // Last-resort error handler: log details, return nothing internal to the client.
 app.use((err: Error & { type?: string }, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

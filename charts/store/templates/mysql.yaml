@@ -1,0 +1,73 @@
+{{- $ns := .Release.Namespace -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql
+  namespace: {{ $ns }}
+  labels: {{- include "platform.labels" . | nindent 4 }}
+spec:
+  clusterIP: None                       # headless: a stable DNS name, no load balancing
+  selector: { app: mysql }
+  ports:
+    - { name: mysql, port: 3306 }
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mysql
+  namespace: {{ $ns }}
+  labels: {{- include "platform.labels" . | nindent 4 }}
+spec:
+  serviceName: mysql
+  replicas: 1
+  selector:
+    matchLabels: { app: mysql }
+  template:
+    metadata:
+      labels: { app: mysql }
+    spec:
+      {{- include "platform.podDefaults" . | nindent 6 }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999                  # the image's "mysql" user: no root, even during init
+        runAsGroup: 999
+        fsGroup: 999
+      containers:
+        - name: mysql
+          image: {{ .Values.store.mysql.image }}
+          ports:
+            - containerPort: 3306
+          env:
+            - { name: MYSQL_DATABASE, value: wordpress }
+            - { name: MYSQL_USER, value: wordpress }
+            - name: MYSQL_PASSWORD
+              valueFrom: { secretKeyRef: { name: mysql-credentials, key: password } }
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom: { secretKeyRef: { name: mysql-credentials, key: root-password } }
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/mysql }
+          resources: {{- toYaml .Values.store.mysql.resources | nindent 12 }}
+          startupProbe:
+            exec: { command: ["sh", "-c", "MYSQL_PWD=\"$MYSQL_ROOT_PASSWORD\" mysqladmin ping -h 127.0.0.1 -uroot"] }
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            exec: { command: ["sh", "-c", "MYSQL_PWD=\"$MYSQL_ROOT_PASSWORD\" mysql -h 127.0.0.1 -uroot -e 'SELECT 1'"] }
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            exec: { command: ["sh", "-c", "MYSQL_PWD=\"$MYSQL_ROOT_PASSWORD\" mysqladmin ping -h 127.0.0.1 -uroot"] }
+            periodSeconds: 20
+            timeoutSeconds: 5
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        {{- include "platform.storageClass" . | nindent 8 }}
+        resources:
+          requests:
+            storage: {{ .Values.store.mysql.storage }}

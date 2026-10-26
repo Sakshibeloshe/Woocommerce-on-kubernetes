@@ -47,6 +47,10 @@ export const config = {
     allowedNamespaces: (process.env.SSRF_ALLOWED_NAMESPACES ?? "").split(",").map((s) => s.trim()).filter(Boolean),
     allowPrivateNetworks: process.env.SSRF_ALLOW_PRIVATE_NETWORKS === "true",
   },
+  stores: {
+    hostSuffix: (process.env.STORE_HOST_SUFFIX ?? "localtest.me").replace(/^\.+|\.+$/g, ""),
+    maxPerUser: Number(process.env.STORES_MAX_PER_USER ?? 3),
+  },
 
   // Chat agent: any OpenAI-compatible chat completions API.
   //   Ollama: http://host.docker.internal:11434/v1   Groq: https://api.groq.com/openai/v1

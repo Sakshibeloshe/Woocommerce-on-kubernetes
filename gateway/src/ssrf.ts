@@ -54,7 +54,7 @@ function classify(ip: string): "blocked" | "private" | "public" {
 /** Is this hostname an in-cluster Service in an allowed namespace? */
 function isAllowedInternalHost(hostname: string): boolean {
   const m = hostname.toLowerCase().match(/^[a-z0-9-]+\.([a-z0-9-]+)\.svc(\.cluster\.local)?\.?$/);
-  return !!m && config.ssrf.allowedNamespaces.includes(m[1]);
+  return !!m && (config.ssrf.allowedNamespaces.includes(m[1]) || /^store-[a-z][a-z0-9-]*-[a-f0-9]{8}$/.test(m[1]));
 }
 
 /** null = allowed, otherwise the reason it isn't. */

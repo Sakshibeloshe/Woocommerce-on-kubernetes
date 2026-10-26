@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: store-config
+  namespace: {{ .Release.Namespace }}
+  labels: {{- include "platform.labels" . | nindent 4 }}
+data:
+  SITE_URL: {{ include "platform.siteUrl" . | quote }}
+  STORE_TITLE: {{ .Values.store.title | quote }}
+  STORE_TIMEZONE: {{ .Values.store.timezone | quote }}
+  STORE_COUNTRY: {{ .Values.store.country | quote }}
+  STORE_CURRENCY: {{ .Values.store.currency | quote }}
+  WOOCOMMERCE_VERSION: {{ .Values.store.wooCommerceVersion | quote }}
+---
+# The setup scripts, read from charts/platform/files/store-setup/ at render time.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: store-setup-scripts
+  namespace: {{ .Release.Namespace }}
+  labels: {{- include "platform.labels" . | nindent 4 }}
+data:
+  {{- (.Files.Glob "files/store-setup/*").AsConfig | nindent 2 }}
