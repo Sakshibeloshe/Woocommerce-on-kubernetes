@@ -155,6 +155,30 @@ Full runbook in **[docs/vps.md](docs/vps.md)**. In short:
 Upgrades: bump an image tag in values → `helm upgrade`. Rollback: `helm history platform`,
 `helm rollback platform <revision>` (restores manifests; take DB backups before schema upgrades).
 
+## Free demo deployment
+
+For a short demo, keep the project running on your PC with k3d and expose the dashboard with a
+Cloudflare Quick Tunnel:
+
+```bash
+cloudflared tunnel --url http://dashboard.localtest.me
+```
+
+Cloudflare prints a temporary public HTTPS URL. Keep Docker Desktop, k3d, and the tunnel process
+running while people use it. Quick Tunnels are temporary and intended for development, not a
+permanent deployment. The dashboard is public at that URL, so use demo data and remove the tunnel
+when finished. See [Cloudflare Tunnel](https://developers.cloudflare.com/tunnel/) and
+[Quick Tunnels](https://developers.cloudflare.com/workers/wrangler/commands/tunnel/).
+
+For a cloud-hosted demo, Oracle Cloud's Always Free allowance currently includes up to 2 Ampere A1
+OCPUs and 12 GB of memory in the tenancy's home region. The project's k3s Helm setup is documented
+in [docs/vps.md](docs/vps.md). Use one gateway replica on a single free VM, publish the project
+images to a registry, and build them for `linux/arm64` because Ampere is ARM-based. The GEO page
+does not need an LLM API key. Free capacity can be unavailable in some regions, and Oracle may
+reclaim idle Always Free instances; treat this as a demo host, not production hosting. Check
+[Oracle's current Always Free limits](https://docs.oracle.com/en-us/iaas/Content/FreeTier/freetier_topic-Always_Free_Resources.htm)
+before creating resources.
+
 ---
 
 ## Tests
