@@ -27,6 +27,33 @@ else
   k3d cluster create --config k8s/k3d-cluster.yaml
 fi
 kubectl config use-context "k3d-$CLUSTER" >/dev/null
+
+# Load images into the cluster from your Docker (pulling them there first if needed), and
+# check they really arrived. The cluster's own downloads from Docker Hub can time out on a
+# slow connection, and "k3d image import" occasionally fails silently; this handles both.
+load_images() {
+  for image in "$@"; do
+    docker image inspect "$image" >/dev/null 2>&1 || docker pull -q "$image" >/dev/null || echo "  could not pull $image"
+  done
+  for attempt in 1 2 3; do
+    k3d image import "$@" -c "$CLUSTER" >/dev/null 2>&1 || true
+    missing=()
+    present=$(docker exec "k3d-$CLUSTER-server-0" crictl images 2>/dev/null)
+    for image in "$@"; do
+      repo=${image%:*}; tag=${image##*:}
+      echo "$present" | grep -qE "(^|/)$repo +$tag " || missing+=("$image")
+    done
+    [ ${#missing[@]} -eq 0 ] && return 0
+    echo "  retrying import of: ${missing[*]}"; set -- "${missing[@]}"
+  done
+  echo "  WARNING: still missing after 3 attempts: ${missing[*]}"
+}
+
+echo "  loading k3s system images from your Docker ..."
+sleep 10   # let k3s create its system pods so we know which images they use
+SYSTEM=$(kubectl get pods -n kube-system -o jsonpath='{range .items[*]}{range .spec.containers[*]}{.image}{"\n"}{end}{end}' | sort -u)
+[ -n "$SYSTEM" ] && load_images $SYSTEM
+
 echo "  waiting for Traefik (the ingress controller) ..."
 until kubectl -n kube-system get deploy traefik >/dev/null 2>&1; do sleep 3; done
 kubectl -n kube-system rollout status deploy/traefik --timeout=300s >/dev/null
@@ -42,11 +69,7 @@ done
 # cluster downloading ~1 GB on a slow connection can exceed Kubernetes' 10-minute
 # rollout deadline and make "helm install --wait" fail; importing avoids that.
 PUBLIC=(mysql:8.4 wordpress:7.1-apache wordpress:cli-2.12-php8.3 postgres:17-alpine curlimages/curl:8.11.1)
-for image in "${PUBLIC[@]}"; do
-  docker image inspect "$image" >/dev/null 2>&1 || docker pull -q "$image" >/dev/null
-  names+=("$image")
-done
-k3d image import "${names[@]}" -c "$CLUSTER" >/dev/null 2>&1 && echo "  imported into k3d"
+load_images "${names[@]}" "${PUBLIC[@]}" && echo "  imported into k3d"
 
 echo "== 3. Helm"
 helm upgrade --install platform charts/platform -f charts/platform/values-local.yaml --timeout 15m --wait

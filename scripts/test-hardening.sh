@@ -44,6 +44,7 @@ expect_fail "write to gateway's root filesystem" kubectl -n gateway exec "$GW" -
 DB=$(kubectl -n gateway exec postgres-0 -- id -u); MY=$(kubectl -n store exec mysql-0 -- id -u)
 expect_ok   "postgres runs as uid 70 (got $DB), mysql as uid 999 (got $MY)" test "$DB" = 70 -a "$MY" = 999
 expect_fail "become root inside the gateway (no setuid, no capabilities)" kubectl -n gateway exec "$GW" -- su -c id
+expect_fail "read a Kubernetes API token inside the gateway (none mounted)" kubectl -n gateway exec "$GW" -- cat /var/run/secrets/kubernetes.io/serviceaccount/token
 
 echo "== 3. SSRF guard when an admin registers a server URL"
 PW=$(kubectl -n gateway get secret gateway-secrets -o jsonpath='{.data.admin-password}' | base64 -d)

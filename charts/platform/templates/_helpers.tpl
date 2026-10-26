@@ -17,6 +17,9 @@ helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version }}
 {{- end }}
 
 {{- define "platform.podDefaults" -}}
+# No component talks to the Kubernetes API, so no pod gets an API token (least privilege:
+# a compromised container can't use one to query or change the cluster).
+automountServiceAccountToken: false
 {{- with .Values.global.imagePullSecrets }}
 imagePullSecrets:
   {{- toYaml . | nindent 2 }}
