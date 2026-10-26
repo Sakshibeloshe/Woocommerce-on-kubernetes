@@ -6,11 +6,13 @@ import { Members } from './pages/Members'
 import { MyKeys } from './pages/Keys'
 import { Audit } from './pages/Audit'
 import { Chat } from './pages/Chat'
+import { Geo } from './pages/Geo'
 
-type Page = 'servers' | 'chat' | 'keys' | 'members' | 'audit'
+type Page = 'servers' | 'chat' | 'keys' | 'members' | 'audit' | 'geo'
 
 const NAV: { page: Page; label: string; adminOnly?: boolean }[] = [
   { page: 'servers', label: 'Servers' },
+  { page: 'geo', label: 'GEO readiness' },
   { page: 'chat', label: 'Chat' },
   { page: 'keys', label: 'My API keys' },
   { page: 'members', label: 'Team', adminOnly: true },
@@ -65,6 +67,7 @@ export default function App() {
       <main className="content">
         {current === 'servers' && <Servers user={user} />}
         {current === 'chat' && <Chat />}
+        {current === 'geo' && <Geo />}
         {current === 'keys' && <MyKeys />}
         {current === 'members' && <Members user={user} />}
         {current === 'audit' && <Audit user={user} />}

@@ -26,13 +26,16 @@ export type ApiKey = { id: string; name: string; prefix: string; created_at: str
 export type NewApiKey = ApiKey & { key: string }
 
 export type AuditEntry = {
-  id: number; ts: string; user_id: string | null; user_email: string | null; source: 'mcp' | 'chat'
+  id: number; ts: string; user_id: string | null; user_email: string | null; source: 'mcp' | 'chat' | 'dashboard'
   server_slug: string | null; tool: string | null; duration_ms: number
   outcome: 'success' | 'error' | 'timeout' | 'unreachable' | 'rejected'; error: string | null
 }
 
 export type ChatTurn = { role: 'user' | 'assistant'; content: string }
 export type ChatStep = { tool: string; arguments: unknown; ok: boolean; result: string; duration_ms: number }
+export type GeoCheck = { key: string; label: string; weight: number; passed: boolean; detail: string; recommendation?: string }
+export type GeoProduct = { id: number; name: string; permalink: string | null; status: string; score: number; checks: GeoCheck[]; structured_record: Record<string, unknown>; recommendations: string[] }
+export type GeoReport = { assessed: number; average_score: number; scoring: string; products: GeoProduct[] }
 
 export class ApiError extends Error {
   status: number
@@ -87,6 +90,7 @@ export const api = {
 
   chatConfig: () => request<{ enabled: boolean; model: string }>('GET', '/api/chat/config'),
   chat: (messages: ChatTurn[]) => request<{ reply: string; steps: ChatStep[] }>('POST', '/api/chat', { messages }),
+  geo: (search = '', per_page = 50) => request<GeoReport>('GET', `/api/geo?${new URLSearchParams({ ...(search && { search }), per_page: String(per_page) })}`),
 }
 
 export const timeAgo = (iso: string | null) => {

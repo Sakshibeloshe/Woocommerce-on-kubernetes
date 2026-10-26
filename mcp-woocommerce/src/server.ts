@@ -3,6 +3,7 @@ import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { wc } from "./woo.js";
+import { assessGeoReadiness } from "./geo.js";
 
 const TZ = process.env.STORE_TIMEZONE ?? "UTC";
 
@@ -62,6 +63,28 @@ function buildServer() {
       try {
         const data = await wc("GET", "/products", { query: { search, per_page } });
         return ok(data.map(slimProduct));
+      } catch (e) { return fail(e); }
+    }
+  );
+
+  server.registerTool(
+    "list_products_geo_readiness",
+    {
+      title: "Assess product GEO readiness",
+      description: "Review WooCommerce listings for observable signals that help AI shopping assistants understand and match products. Returns a rule-based score and actionable listing recommendations; it does not predict a specific AI ranking.",
+      inputSchema: {
+        search: z.string().optional().describe("Optional product name search"),
+        per_page: z.number().int().min(1).max(100).default(20),
+      },
+    },
+    async ({ search, per_page }) => {
+      try {
+        const products = await wc("GET", "/products", { query: { search, per_page, status: "publish" } });
+        const assessments = products.map(assessGeoReadiness);
+        const average = assessments.length
+          ? Math.round(assessments.reduce((sum: number, product: { score: number }) => sum + product.score, 0) / assessments.length)
+          : 0;
+        return ok({ assessed: assessments.length, average_score: average, scoring: "Deterministic listing completeness checks; not a ranking or recommendation guarantee.", products: assessments });
       } catch (e) { return fail(e); }
     }
   );

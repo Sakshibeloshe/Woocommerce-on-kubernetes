@@ -39,7 +39,7 @@ export function Audit({ user }: { user: User }) {
       <div className="page-head">
         <div>
           <h2>Audit log</h2>
-          <p className="muted">{isAdmin ? 'Every tool call by anyone' : 'Your tool calls'}, through MCP clients and the chat, including rejected and failed ones.</p>
+          <p className="muted">{isAdmin ? 'Every tool call by anyone' : 'Your tool calls'}, through MCP clients, dashboard features, and chat, including rejected and failed ones.</p>
         </div>
         <button onClick={load}>Refresh</button>
       </div>
@@ -66,7 +66,7 @@ export function Audit({ user }: { user: User }) {
               <tr key={e.id}>
                 <td className="nowrap">{new Date(e.ts).toLocaleString()}</td>
                 <td>{e.user_email ?? <span className="muted">unknown key</span>}</td>
-                <td>{e.source === 'chat' ? 'chat' : 'MCP client'}</td>
+                <td>{e.source === 'dashboard' ? 'dashboard' : e.source === 'chat' ? 'chat' : 'MCP client'}</td>
                 <td><code>{e.server_slug ?? '—'}</code></td>
                 <td><code>{e.tool ?? '—'}</code></td>
                 <td className="right">{e.duration_ms} ms</td>

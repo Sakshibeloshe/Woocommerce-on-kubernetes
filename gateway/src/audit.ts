@@ -6,7 +6,7 @@ export type AuditEntry = {
   userId?: string | null;
   userEmail?: string | null;
   apiKeyId?: string | null;
-  source: "mcp" | "chat";
+  source: "mcp" | "chat" | "dashboard";
   serverId?: string | null;
   serverSlug?: string | null;
   tool?: string | null;

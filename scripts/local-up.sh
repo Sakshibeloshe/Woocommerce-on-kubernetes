@@ -13,11 +13,11 @@ cd "$(dirname "$0")/.."
 CLUSTER=woo
 # Image tags must match charts/platform/values.yaml.
 IMAGES=(
-  "mcp-woocommerce:0.1.1=mcp-woocommerce"
+  "mcp-woocommerce:0.1.2=mcp-woocommerce"
   "mcp-notes:0.1.1=mcp-notes"
   "mcp-toolbox:0.1.1=mcp-toolbox"
-  "mcp-gateway:0.3.0=gateway"
-  "mcp-dashboard:0.1.0=dashboard"
+  "mcp-gateway:0.3.1=gateway"
+  "mcp-dashboard:0.1.1=dashboard"
 )
 
 echo "== 1. Cluster"

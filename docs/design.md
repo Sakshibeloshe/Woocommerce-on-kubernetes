@@ -31,6 +31,16 @@ Request paths:
 | **k3d locally, k3s on the VPS** | the same distribution (Traefik, local-path storage, kube-router NetworkPolicies) in both places | — |
 | **LLM via any OpenAI-compatible API** | Ollama locally (free, offline), Groq/Gemini on a VPS, by configuration only | no provider-specific features |
 
+### GEO readiness
+
+The dashboard's GEO readiness page assesses published WooCommerce products using deterministic
+listing checks: descriptive names and descriptions, categories/tags, structured attributes,
+image alt text, price, and published/stock status. It returns a weighted completeness score and
+specific suggestions. This score describes the listing fields present in WooCommerce; it is not
+an AI ranking prediction or a guarantee of visibility. The dashboard calls the assessment through
+the WooCommerce MCP tool and gateway, so the store credential remains in the WooCommerce service
+and each assessment is recorded in the gateway audit log.
+
 ## How the WooCommerce MCP server talks to the store
 
 The MCP server calls the **WooCommerce REST API** (`/wp-json/wc/v3/...`) at the in-cluster

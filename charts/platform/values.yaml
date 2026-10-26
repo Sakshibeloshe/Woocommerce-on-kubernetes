@@ -70,7 +70,7 @@ store:
 
 mcp:
   woocommerce:
-    image: { repository: mcp-woocommerce, tag: "0.1.1" }
+    image: { repository: mcp-woocommerce, tag: "0.1.2" }
     resources:
       requests: { cpu: 25m, memory: 64Mi }
       limits: { cpu: 250m, memory: 128Mi }
@@ -92,7 +92,7 @@ gateway:
   host: dashboard.localtest.me
   adminEmail: admin@example.com     # first admin; its password is generated into a Secret
   replicas: 1
-  image: { repository: mcp-gateway, tag: "0.3.0" }
+  image: { repository: mcp-gateway, tag: "0.3.1" }
   refreshIntervalMs: 10000
   seedServers: true                 # register woo / notes / toolbox on first start
   resources:
@@ -123,7 +123,7 @@ gateway:
       limits: { cpu: 500m, memory: 512Mi }
 
 dashboard:
-  image: { repository: mcp-dashboard, tag: "0.1.0" }
+  image: { repository: mcp-dashboard, tag: "0.1.1" }
   resources:
     requests: { cpu: 10m, memory: 16Mi }
     limits: { cpu: 200m, memory: 64Mi }

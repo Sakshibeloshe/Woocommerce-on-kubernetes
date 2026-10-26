@@ -110,11 +110,28 @@ td > .badge { margin-left: 0; }
 .chat-input { display: flex; gap: 8px; }
 .chat-input input { flex: 1; }
 
+/* GEO readiness */
+.geo-note { border-left: 3px solid var(--accent); }
+.geo-note p { margin: 4px 0 0; }
+.geo-summary { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
+.geo-summary strong { font-size: 20px; }
+.geo-product-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 12px; }
+.geo-product-head h3 { display: inline; margin-right: 8px; }
+.geo-checks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.geo-check { display: grid; grid-template-columns: 18px 1fr auto; gap: 8px; align-items: start; padding: 10px; background: var(--bg); border-radius: 6px; }
+.geo-pass { color: var(--ok); font-weight: 700; }
+.geo-miss { color: var(--warn); font-weight: 700; }
+.geo-recommendation { margin-top: 5px; font-size: 12px; }
+.geo-record { margin-top: 12px; }
+.geo-record summary { cursor: pointer; color: var(--accent); }
+.geo-record p { margin: 6px 0; }
+
 @media (max-width: 760px) {
   .layout { flex-direction: column; }
   .sidebar { width: auto; flex-direction: row; flex-wrap: wrap; align-items: center; border-right: none; border-bottom: 1px solid var(--border); }
   .sidebar nav { flex-direction: row; flex-wrap: wrap; }
   .me { margin-top: 0; }
   .content { padding: 16px; }
+  .geo-checks { grid-template-columns: 1fr; }
   .page-head, .server-head { flex-direction: column; }
 }

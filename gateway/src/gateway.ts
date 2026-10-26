@@ -7,7 +7,7 @@ import type { User } from "./auth.js";
 import { audit, type Outcome } from "./audit.js";
 import { presentTool, upstreams, UpstreamError } from "./upstreams.js";
 
-export type Caller = { user: User; apiKeyId: string | null; source: "mcp" | "chat" };
+export type Caller = { user: User; apiKeyId: string | null; source: "mcp" | "chat" | "dashboard" };
 
 const errorResult = (text: string): CallToolResult => ({ isError: true, content: [{ type: "text", text }] });
 
