@@ -92,7 +92,7 @@ gateway:
   host: dashboard.localtest.me
   adminEmail: admin@example.com     # first admin; its password is generated into a Secret
   replicas: 1
-  image: { repository: mcp-gateway, tag: "0.3.2" }
+  image: { repository: mcp-gateway, tag: "0.3.3" }
   refreshIntervalMs: 10000
   stores:
     maxPerUser: 3
@@ -125,7 +125,7 @@ gateway:
       limits: { cpu: 500m, memory: 512Mi }
 
 dashboard:
-  image: { repository: mcp-dashboard, tag: "0.2.0" }
+  image: { repository: mcp-dashboard, tag: "0.2.1" }
   resources:
     requests: { cpu: 10m, memory: 16Mi }
     limits: { cpu: 200m, memory: 64Mi }

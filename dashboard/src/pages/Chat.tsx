@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { api, type ChatStep, type ChatTurn } from '../api'
 import { ErrorBox, useAction } from '../ui'
+import { Markdown } from '../markdown'
 
 type Message = ChatTurn & { steps?: ChatStep[] }
 
@@ -64,7 +65,7 @@ export function Chat() {
                 ))}
               </div>
             )}
-            <div className="bubble">{m.content}</div>
+            <div className="bubble">{m.role === 'assistant' ? <Markdown text={m.content} /> : m.content}</div>
           </div>
         ))}
         {busy && <div className="msg msg-assistant"><div className="bubble muted">Thinking and calling tools…</div></div>}

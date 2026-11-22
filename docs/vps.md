@@ -48,7 +48,7 @@ The VPS can't see images built on your laptop, so push them to a registry
 ```bash
 echo $GITHUB_TOKEN | docker login ghcr.io -u YOUR_GITHUB_USER --password-stdin
 for pair in mcp-woocommerce:0.1.2:mcp-woocommerce mcp-notes:0.1.1:mcp-notes \
-            mcp-toolbox:0.1.1:mcp-toolbox mcp-gateway:0.3.2:gateway mcp-dashboard:0.2.0:dashboard; do
+            mcp-toolbox:0.1.1:mcp-toolbox mcp-gateway:0.3.3:gateway mcp-dashboard:0.2.1:dashboard; do
   IFS=: read name tag dir <<< "$pair"
   docker build -t ghcr.io/YOUR_GITHUB_USER/$name:$tag $dir
   docker push ghcr.io/YOUR_GITHUB_USER/$name:$tag
