@@ -8,18 +8,21 @@ import { Audit } from './pages/Audit'
 import { Chat } from './pages/Chat'
 import { Geo } from './pages/Geo'
 import { Stores } from './pages/Stores'
+import { Brand, Icon } from './ui'
 
 type Page = 'servers' | 'chat' | 'keys' | 'members' | 'audit' | 'geo' | 'stores'
 
-const NAV: { page: Page; label: string; adminOnly?: boolean }[] = [
-  { page: 'servers', label: 'Servers' },
-  { page: 'stores', label: 'Stores' },
-  { page: 'geo', label: 'GEO readiness' },
-  { page: 'chat', label: 'Chat' },
-  { page: 'keys', label: 'My API keys' },
-  { page: 'members', label: 'Team', adminOnly: true },
-  { page: 'audit', label: 'Audit log' },
+const NAV: { page: Page; label: string; icon: string; adminOnly?: boolean }[] = [
+  { page: 'servers', label: 'Servers', icon: 'M4 5h16v5H4zM4 14h16v5H4zM8 7.5h.01M8 16.5h.01' },
+  { page: 'stores', label: 'Stores', icon: 'M4 9l1.5-5h13L20 9M4 9h16v11H4zM9 20v-6h6v6' },
+  { page: 'geo', label: 'GEO readiness', icon: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM8 12l3 3 5-6' },
+  { page: 'chat', label: 'Chat', icon: 'M4 5h16v11H9l-5 4z' },
+  { page: 'keys', label: 'My API keys', icon: 'M14 10a4 4 0 1 0-1.2 2.8L20 20M16 16l2-2' },
+  { page: 'members', label: 'Team', icon: 'M9 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM3 20c0-3 3-5 6-5s6 2 6 5M16 5a3 3 0 0 1 0 6M18 15c2 .5 3 2 3 5', adminOnly: true },
+  { page: 'audit', label: 'Audit log', icon: 'M6 3h9l4 4v14H6zM9 11h7M9 15h7M9 7h3' },
 ]
+
+const today = () => new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
 
 // Minimal router: the page lives in the URL path (/servers, /chat, ...), so reload and
 // back/forward work. nginx serves index.html for every path (see dashboard/nginx.conf).
@@ -49,24 +52,35 @@ export default function App() {
 
   const visible = NAV.filter((n) => !n.adminOnly || user.role === 'admin')
   const current = visible.some((n) => n.page === page) ? page : 'servers'
+  const display = user.name?.trim() || user.email.split('@')[0]
+  const firstName = display.split(/\s+/)[0]
+  const initials = display.split(/\s+/).slice(0, 2).map((w) => w[0]).join('')
 
   return (
     <div className="layout">
       <aside className="sidebar">
-        <div className="brand">MCP Gateway</div>
+        <Brand />
         <nav>
           {visible.map((n) => (
             <a key={n.page} href={`/${n.page}`} className={current === n.page ? 'active' : ''}
-              onClick={(e) => { e.preventDefault(); go(n.page) }}>{n.label}</a>
+              onClick={(e) => { e.preventDefault(); go(n.page) }}><Icon d={n.icon} />{n.label}</a>
           ))}
         </nav>
-        <div className="me">
-          <div className="small">{user.email}</div>
-          <div className="muted small">{user.role}</div>
-          <button className="link" onClick={async () => { await api.logout(); setUser(null) }}>Sign out</button>
-        </div>
+        <button className="logout" onClick={async () => { await api.logout(); setUser(null) }}>
+          <Icon d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10" />Log out
+        </button>
       </aside>
       <main className="content">
+        <header className="topbar">
+          <div>
+            <div className="hello">Hello, {firstName}.</div>
+            <div className="hello-sub">{today()}</div>
+          </div>
+          <div className="who">
+            <div className="who-text"><div className="who-name">{user.name || user.email}</div><div className="who-role">{user.role} · {user.email}</div></div>
+            <div className="avatar">{initials}</div>
+          </div>
+        </header>
         {current === 'servers' && <Servers user={user} />}
         {current === 'chat' && <Chat />}
         {current === 'geo' && <Geo />}

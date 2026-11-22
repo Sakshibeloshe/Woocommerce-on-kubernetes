@@ -17,7 +17,7 @@ IMAGES=(
   "mcp-notes:0.1.1=mcp-notes"
   "mcp-toolbox:0.1.1=mcp-toolbox"
   "mcp-gateway:0.3.2=gateway"
-  "mcp-dashboard:0.1.3=dashboard"
+  "mcp-dashboard:0.2.0=dashboard"
 )
 
 echo "== 1. Cluster"

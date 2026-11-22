@@ -58,3 +58,15 @@ export function useAction() {
   }
   return { busy, error, setError, run }
 }
+
+// Stroke icon from one SVG path (no icon library).
+export const Icon = ({ d }: { d: string }) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d} /></svg>
+)
+
+export const Brand = () => (
+  <div className="brand">
+    <div className="brand-mark"><Icon d="M12 3v6M12 15v6M3 12h6M15 12h6M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z" /></div>
+    <div><div className="brand-name">MCP Gateway</div><div className="brand-sub">one endpoint, every tool</div></div>
+  </div>
+)

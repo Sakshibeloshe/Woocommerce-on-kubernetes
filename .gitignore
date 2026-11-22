@@ -2,3 +2,5 @@
 node_modules/
 dist/
 .claude/
+scripts/oracle-deploy.log
+scripts/oracle-update.log

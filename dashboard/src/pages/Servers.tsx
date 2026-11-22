@@ -36,6 +36,13 @@ export function Servers({ user }: { user: User }) {
       </div>
       <ErrorBox error={error} />
       {!servers && <p className="muted">Loading…</p>}
+      {servers && (
+        <div className="stats">
+          <div className="stat stat-dark"><span className="stat-label">Tools via one endpoint</span><span className="stat-value">{servers.filter((s) => s.enabled).reduce((n, s) => n + s.tools.length, 0)}</span></div>
+          <div className="stat"><span className="stat-label">Connected servers</span><span className="stat-value">{servers.filter((s) => s.status === 'connected').length}</span></div>
+          <div className="stat"><span className="stat-label">Need attention</span><span className="stat-value">{servers.filter((s) => s.status === 'unreachable').length}</span></div>
+        </div>
+      )}
 
       <div className="server-list">
         {servers?.map((s) => (

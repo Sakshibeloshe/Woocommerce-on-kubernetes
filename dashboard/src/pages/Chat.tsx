@@ -57,7 +57,7 @@ export function Chat() {
               <div className="steps">
                 {m.steps.map((s, j) => (
                   <details key={j} className={s.ok ? 'step' : 'step step-failed'}>
-                    <summary>{s.ok ? '🔧' : '⚠️'} <code>{s.tool}</code> <span className="muted small">{s.duration_ms} ms</span></summary>
+                    <summary><span className="step-dot" /> <code>{s.tool}</code> <span className="muted small">{s.duration_ms} ms</span></summary>
                     <div className="small"><b>Arguments</b><pre>{JSON.stringify(s.arguments, null, 2)}</pre></div>
                     <div className="small"><b>Result</b><pre>{s.result}</pre></div>
                   </details>

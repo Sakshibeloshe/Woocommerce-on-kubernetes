@@ -1,0 +1,49 @@
+# Oracle Always Free VM (ARM, 2 OCPU / 12 GB), k3s, no domain, no TLS.
+#   helm upgrade --install platform charts/platform -f charts/platform/values-oracle.yaml --timeout 15m --wait
+# Chart creates namespaces + secrets itself (no create-secrets.sh needed).
+
+global:
+  storageClass: local-path
+  imageRegistry: ghcr.io/sakshibeloshe   # images built for linux/arm64, packages public
+  imagePullPolicy: IfNotPresent
+
+namespaces:
+  create: true      # also adds platform.example/store label the gateway NetworkPolicy needs
+secrets:
+  generate: true    # random on first install, kept on upgrades
+
+ingress:
+  className: traefik
+  tls:
+    enabled: false  # nip.io + Let's Encrypt unreliable; plain http for demo
+
+store:
+  host: store.129.154.239.224.nip.io
+  adminEmail: admin@store.example.com
+  mysql:
+    storage: 10Gi
+  wordpress:
+    storage: 10Gi
+    resources:
+      requests: { cpu: 200m, memory: 384Mi }
+      limits: { cpu: "1", memory: 768Mi }
+
+gateway:
+  host: dashboard.129.154.239.224.nip.io
+  adminEmail: admin@example.com
+  replicas: 1
+  llm:
+    baseUrl: ""          # chat off for now. Later: https://api.groq.com/openai/v1
+    model: ""            # later: llama-3.3-70b-versatile
+    timeoutMs: 60000
+    existingSecret: ""   # later: llm-api-key (create the Secret FIRST or gateway pod won't start)
+  extraEgress:
+    # HTTPS to public internet (cloud LLM later). Private + metadata ranges stay closed.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16, 100.64.0.0/10]
+      ports:
+        - { port: 443, protocol: TCP }
+  postgres:
+    storage: 5Gi

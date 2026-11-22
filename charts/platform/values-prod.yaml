@@ -5,7 +5,7 @@
 
 global:
   storageClass: local-path          # k3s' built-in provisioner (explicit, not "whatever is default")
-  imageRegistry: ghcr.io/YOUR_GITHUB_USER   # images pushed by CI or by hand (see docs/vps.md)
+  imageRegistry: ghcr.io/sakshibeloshe   # images pushed by CI or by hand (see docs/vps.md)
   imagePullPolicy: IfNotPresent
 
 # Namespaces and Secrets are created BEFORE install with k8s/create-secrets.sh
