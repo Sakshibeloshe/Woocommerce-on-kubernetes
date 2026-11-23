@@ -23,7 +23,12 @@ else
 fi
 cd ~/Woocommerce-on-kubernetes || exit 1
 # Charts uploaded by oracle-update.bat win over GitHub, so the VM runs exactly what is on your PC.
-if [ -f ~/charts.tgz ]; then tar -xzf ~/charts.tgz -C ~/Woocommerce-on-kubernetes && rm -f ~/charts.tgz && echo "using charts uploaded from your PC"; fi
+if [ -f ~/charts.tgz ]; then
+  rm -rf charts   # replace, don't merge (tar refuses to overwrite some files)
+  if tar --warning=no-unknown-keyword -xzf ~/charts.tgz -C ~/Woocommerce-on-kubernetes; then echo "using charts uploaded from your PC"
+  else echo "WARN: chart upload unreadable, using GitHub's charts"; git checkout -q -- charts; fi
+  rm -f ~/charts.tgz
+fi
 git log -1 --format='repo at %h %s' 
 
 step "4. image pulls"

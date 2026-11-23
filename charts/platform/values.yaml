@@ -144,7 +144,7 @@ provisioner:
     limits: { cpu: "1", memory: 384Mi }
 
 dashboard:
-  image: { repository: mcp-dashboard, tag: "0.2.1" }
+  image: { repository: mcp-dashboard, tag: "0.2.2" }
   resources:
     requests: { cpu: 10m, memory: 16Mi }
     limits: { cpu: 200m, memory: 64Mi }

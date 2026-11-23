@@ -2,7 +2,7 @@
 rem One click: rebuild the dashboard for ARM, push to GHCR, optionally turn on chat (Groq key),
 rem and roll everything out on the Oracle VM. Needs Docker Desktop running. Log: oracle-update.log
 cd /d "%~dp0"
-set TAG=0.2.1
+set TAG=0.2.2
 set IMG=ghcr.io/sakshibeloshe/mcp-dashboard:%TAG%
 set GWTAG=0.3.3
 set GWIMG=ghcr.io/sakshibeloshe/mcp-gateway:%GWTAG%
