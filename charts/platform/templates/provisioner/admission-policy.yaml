@@ -1,0 +1,58 @@
+{{- if and .Values.provisioner.enabled .Values.provisioner.admissionPolicy }}
+{{- $sa := printf "system:serviceaccount:%s:store-provisioner" .Values.namespaces.gateway -}}
+# Defense in depth: RBAC can't restrict "create namespace" or "create rolebinding" by name, so this
+# policy does. Requests from the provisioner's ServiceAccount are denied unless they target:
+#   - a namespace named store-* that carries platform.example/managed-by=store-provisioner, or
+#   - a RoleBinding to store-admin inside such a namespace.
+# Even a compromised provisioner can't delete the gateway namespace or bind itself cluster-admin.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: store-provisioner-scope
+  labels: {{- include "platform.labels" . | nindent 4 }}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE, DELETE]
+        resources: [namespaces]
+      - apiGroups: [rbac.authorization.k8s.io]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE, DELETE]
+        resources: [rolebindings]
+  matchConditions:
+    - name: only-the-provisioner
+      expression: "request.userInfo.username == '{{ $sa }}'"
+  variables:
+    - name: obj
+      expression: "request.operation == 'DELETE' ? oldObject : object"
+  validations:
+    - expression: >-
+        request.resource.resource != 'namespaces' ||
+        (variables.obj.metadata.name.startsWith('store-') &&
+         has(variables.obj.metadata.labels) &&
+         'platform.example/managed-by' in variables.obj.metadata.labels &&
+         variables.obj.metadata.labels['platform.example/managed-by'] == 'store-provisioner')
+      message: "store-provisioner may only create or delete store-* namespaces labelled platform.example/managed-by=store-provisioner"
+    - expression: >-
+        request.resource.resource != 'rolebindings' ||
+        (namespaceObject != null && has(namespaceObject.metadata.labels) &&
+         'platform.example/managed-by' in namespaceObject.metadata.labels &&
+         namespaceObject.metadata.labels['platform.example/managed-by'] == 'store-provisioner')
+      message: "store-provisioner may only manage RoleBindings inside namespaces it created"
+    - expression: >-
+        request.resource.resource != 'rolebindings' || request.operation == 'DELETE' ||
+        (object.roleRef.kind == 'ClusterRole' && object.roleRef.name == 'store-provisioner-store-admin')
+      message: "store-provisioner may only bind the store-provisioner-store-admin role"
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: store-provisioner-scope
+  labels: {{- include "platform.labels" . | nindent 4 }}
+spec:
+  policyName: store-provisioner-scope
+  validationActions: [Deny]
+{{- end }}

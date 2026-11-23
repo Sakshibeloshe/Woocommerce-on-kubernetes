@@ -122,55 +122,41 @@ is left empty rather than guessed. Assessments are routed through the WooCommerc
 recorded in the gateway audit log. This is a listing-completeness diagnostic, not a promise of
 ranking or citations in any particular AI system. The GEO page does not require an LLM API key.
 
-### Multiple isolated stores (manual operator workflow)
+### Multiple isolated stores
 
-The **Stores** page lets a user request an isolated WooCommerce store. Each store gets its own
-Kubernetes namespace, Helm release, MySQL database and volume claims, hostname, Secret, and
-gateway tool prefix. Store creation is deliberately split: the gateway does not hold a Kubernetes
-token or have namespace-creation privileges. A cluster operator performs Kubernetes steps with
-their own trusted kubeconfig.
+The **Stores** page lets any user create and delete isolated WooCommerce stores (up to
+`gateway.stores.maxPerUser`, default 3). Each store gets its own namespace, Helm release
+(`charts/store/`), MySQL database, volumes, Secrets, Ingress host, ResourceQuota/LimitRange,
+NetworkPolicies and gateway tool prefix (`store-<slug>__<tool>`).
 
-1. In **Dashboard → Stores**, create a store with a globally unique slug. The page shows its
-   assigned namespace, hostname, and operator commands. Fill in both the store name and slug, then
-   select **Create store**. On Windows, an admin runs the PowerShell
-   preparation command from the repository root, for example:
-   ```powershell
-   .\scripts\prepare-store-namespace.ps1 -Namespace 'store-blue-shop-1234abcd'
-   ```
-   Git Bash and macOS/Linux can use:
-   ```bash
-   bash scripts/prepare-store-namespace.sh store-blue-shop-1234abcd
-   ```
-2. After the namespace has the `platform.example/store=true` label, an admin clicks **Start Helm
-   install** and runs the displayed command. For a production cluster, use its values file so the
-   registry, storage class, and other production settings match the base release:
-   ```powershell
-   .\scripts\provision-store.ps1 -Namespace 'store-blue-shop-1234abcd' `
-     -Hostname 'store-blue-shop.example.com' -Title 'Blue Shop' `
-     -ValuesFile 'charts/platform/values-prod.yaml'
-   ```
-   Git Bash and macOS/Linux can use:
-   ```bash
-   STORE_VALUES_FILE=charts/platform/values-prod.yaml \
-     bash scripts/provision-store.sh store-blue-shop-1234abcd store-blue-shop.example.com 'Blue Shop'
-   ```
-3. When Helm succeeds, click **Register / retry MCP**. The gateway checks the service endpoint,
-   adds it as an upstream, and exposes tools as `store-<slug>__<tool>`.
-4. To remove a store, use **Remove store**. This immediately unregisters its gateway tools. An
-   admin then runs the displayed PowerShell script (or the `.sh` equivalent on Git Bash/Linux).
-   For example:
-   ```powershell
-   .\scripts\delete-store-namespace.ps1 -Namespace 'store-blue-shop-1234abcd'
-   ```
-   This deletes the namespace, including its database, Secrets, and PVCs. Then click
-   **Confirm namespace deleted**. The storage class's reclaim policy determines whether the
-   backing storage is permanently deleted or retained after its PVC is removed. The dashboard's
-   **Deleted** status tracks the app record; it cannot verify Kubernetes state. If a namespace is
-   still present, the deleted store card shows a `kubectl get namespace` check and a cleanup command.
+**Automatic (default, `provisioner.enabled: true`)**: create a store in the dashboard and it moves
+*Provisioning → Ready* on its own (usually 3–8 minutes); several stores can provision at once.
+Removing a store deletes its namespace with everything in it, then its MCP registration.
 
-The platform Helm chart grants no Kubernetes API access to the gateway. Store namespace setup,
-installation, and deletion are explicit operator actions; the dashboard tracks the workflow and
-manages gateway registration.
+How it works: the internet-facing gateway still has **no Kubernetes credentials**. It only writes
+the request to Postgres. A separate, unexposed `store-provisioner` Deployment (`store-provisioner/`)
+picks it up and:
+1. creates namespace `store-<slug>-<id>` labelled `platform.example/managed-by=store-provisioner`;
+2. binds the `store-provisioner-store-admin` ClusterRole **inside that namespace only**;
+3. runs `helm upgrade --install` of `charts/store` with the platform's registry/storage/ingress values;
+4. registers the store's MCP server in the gateway, then marks the store Ready.
+
+Least privilege (`charts/platform/templates/provisioner/`): cluster-wide it may only create/delete
+namespaces, manage RoleBindings and *bind* that one role. A `ValidatingAdmissionPolicy` denies any
+request from its ServiceAccount unless it targets a `store-*` namespace it labelled itself (or a
+RoleBinding to store-admin inside one), so it cannot touch `gateway`, the base `store` or
+`kube-system`, or grant itself more rights. It is the only pod with an API token, accepts no inbound
+traffic, and may only reach Postgres and the API server.
+
+Guardrails and recovery: per-user store limit, per-namespace ResourceQuota/LimitRange, a provisioning
+deadline (`provisioner.timeoutMinutes`, default 20) after which the store fails with a clear reason,
+and a **Retry** button. Every step is idempotent; if the provisioner restarts mid-install it resumes
+the store (a Helm release stuck in `pending-*` is reset first) or fails it cleanly at the deadline.
+
+**Manual (`provisioner.enabled: false`)**: the dashboard shows operator commands instead, run with a
+trusted kubeconfig: `scripts/prepare-store-namespace.*`, `scripts/provision-store.*` (add the
+environment's values file, e.g. `STORE_VALUES_FILE=charts/platform/values-prod.yaml`), then
+**Register / retry MCP**; for removal `scripts/delete-store-namespace.*` and **Confirm namespace deleted**.
 
 ### Connect an external MCP client
 Generate a key under **My API keys**, then use only the gateway URL and the key.
@@ -253,9 +239,9 @@ Upgrades: bump an image tag in values → `helm upgrade`. Rollback: `helm histor
 | 6. Security hardening | Done: SSRF guard (allowlist + connect-time IP check), default-deny NetworkPolicies per namespace, non-root containers (except the official WordPress image), read-only root filesystems, dropped capabilities, no service-account tokens mounted, upstream credentials encrypted at rest (AES-256-GCM), rate limits, timing-safe login | `gateway/src/ssrf.ts`, `ratelimit.ts`, `crypto.ts`, `charts/platform/templates/*/network-policies.yaml`, `scripts/test-hardening.sh` |
 | 7. Scaling | Done: stateless `/mcp`, gateway tested with 2 replicas; per-key / per-user rate limits (in memory, per replica) | `values-prod.yaml` (`replicas: 2`), `ratelimit.ts` |
 | 9. Upgrades and rollback | Done and documented: pinned image tags, idempotent setup hook, `helm history` / `rollback` | `docs/vps.md` |
-| 1. VPS deployment | Documented and configured, see `docs/vps.md` | `values-prod.yaml` |
+| 1. VPS deployment | Done: live on Oracle Cloud Always Free (k3s, ARM) with the same chart; only a values file differs | `values-oracle.yaml`, `scripts/oracle-*.bat`, `docs/vps.md` |
 | 8. Observability | Partial: per-server status with the reason it's unreachable; failure reasons in the audit log. No metrics endpoint | Servers page, Audit page |
-| Multi-store bonus | Implemented with an operator-driven namespace workflow; each store uses `charts/store/`, while the gateway stays tokenless | `gateway/src/routes/stores.ts`, `dashboard/src/pages/Stores.tsx`, `scripts/*store*.sh` |
+| Multi-store bonus | Done: create/delete from the dashboard, automatic Helm provisioning by a least-privilege in-cluster provisioner (RBAC + ValidatingAdmissionPolicy), auto MCP registration, NetworkPolicy isolation, quotas, per-user limit, timeout, restart-safe retries | `store-provisioner/`, `charts/platform/templates/provisioner/`, `charts/store/`, `gateway/src/routes/stores.ts`, `dashboard/src/pages/Stores.tsx` |
 | 2. Tool permissions, 3. OAuth, 4. Many tools, 5. Hosted servers | Not attempted | |
 
 ## Repository layout
@@ -267,6 +253,7 @@ dashboard/           React dashboard (Vite), served by nginx
 mcp-woocommerce/     WooCommerce MCP server
 mcp-notes/           notes MCP server (bearer token)
 mcp-toolbox/         toolbox MCP server
+store-provisioner/   in-cluster provisioner for the Stores page (Helm + least-privilege RBAC)
 scripts/             local-up.sh, test-hardening.sh, per-store PowerShell and Bash scripts
 k8s/                 k3d cluster config, create-secrets.sh, test-gateway.sh, plain manifests (learning path)
 woo-sandbox/         Docker Compose sandbox used to learn WooCommerce before Kubernetes

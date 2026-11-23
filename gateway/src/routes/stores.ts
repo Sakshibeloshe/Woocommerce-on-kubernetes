@@ -21,7 +21,7 @@ storesRouter.get("/", ah(async (req, res) => {
     ? "SELECT " + storeProjection + " FROM stores s JOIN users u ON u.id = s.owner_user_id ORDER BY s.created_at DESC"
     : "SELECT " + storeProjection + " FROM stores s JOIN users u ON u.id = s.owner_user_id WHERE s.owner_user_id = $1 ORDER BY s.created_at DESC";
   const { rows } = await pool.query(query, isAdmin(req.user) ? [] : [req.user!.id]);
-  res.json({ stores: rows, max_per_user: config.stores.maxPerUser });
+  res.json({ stores: rows, max_per_user: config.stores.maxPerUser, auto_provision: config.stores.autoProvision });
 }));
 
 storesRouter.post("/", ah(async (req, res) => {
@@ -48,10 +48,13 @@ storesRouter.post("/", ah(async (req, res) => {
       return res.status(409).json({ error: "You can have at most " + config.stores.maxPerUser + " active stores" });
     }
     const { rows } = await client.query(
-      `INSERT INTO stores (id, owner_user_id, slug, title, namespace, release_name, hostname, status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, 'waiting_for_namespace')
+      `INSERT INTO stores (id, owner_user_id, slug, title, namespace, release_name, hostname, status, last_error)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING id, slug, title, namespace, release_name, hostname, status, last_error, created_at, updated_at`,
-      [id, req.user!.id, body.slug, body.title, namespace, releaseName, hostname]
+      // Automatic mode: the provisioner picks 'provisioning' rows up. Manual mode: an operator prepares the namespace.
+      [id, req.user!.id, body.slug, body.title, namespace, releaseName, hostname,
+        config.stores.autoProvision ? "provisioning" : "waiting_for_namespace",
+        config.stores.autoProvision ? "Queued for provisioning…" : null]
     );
     await client.query("COMMIT");
     res.status(201).json({ store: { ...rows[0], owner_email: req.user!.email } });
@@ -65,12 +68,14 @@ storesRouter.post("/", ah(async (req, res) => {
 }));
 
 storesRouter.post("/:id/provision", ah(async (req, res) => {
-  if (!isAdmin(req.user)) return res.status(403).json({ error: "Only an admin can start provisioning" });
+  // Manual mode: an admin (operator) starts the Helm step. Automatic mode: the owner may also retry a failed store.
+  const admin = isAdmin(req.user);
+  if (!admin && !config.stores.autoProvision) return res.status(403).json({ error: "Only an admin can start provisioning" });
   const { rows } = await pool.query(
-    `UPDATE stores SET status = 'provisioning', last_error = NULL, updated_at = now()
-      WHERE id = $1 AND status IN ('waiting_for_namespace', 'failed')
+    `UPDATE stores SET status = 'provisioning', last_error = $4, updated_at = now()
+      WHERE id = $1 AND status IN ('waiting_for_namespace', 'failed') AND ($2::boolean OR owner_user_id = $3)
       RETURNING id, slug, title, namespace, release_name, hostname, status, last_error, created_at, updated_at`,
-    [req.params.id]
+    [req.params.id, admin, req.user!.id, config.stores.autoProvision ? "Queued for provisioning…" : null]
   );
   if (!rows[0]) return res.status(409).json({ error: "Store is not waiting to be provisioned" });
   res.json({ store: { ...rows[0], owner_email: req.user!.email } });
@@ -152,7 +157,9 @@ storesRouter.delete("/:id", ah(async (req, res) => {
       `UPDATE stores SET status = 'cleanup_pending', last_error = $2, updated_at = now()
         WHERE id = $1
         RETURNING id, slug, title, namespace, release_name, hostname, status, last_error, created_at, updated_at`,
-      [store.id, "Gateway tools are removed. An admin must delete namespace " + store.namespace + " and confirm cleanup."]
+      [store.id, config.stores.autoProvision
+        ? "Gateway tools are removed. Deleting namespace " + store.namespace + " with its database, volumes and Secrets…"
+        : "Gateway tools are removed. An admin must delete namespace " + store.namespace + " and confirm cleanup."]
     );
     updated = changed[0];
     await client.query("COMMIT");
@@ -175,5 +182,13 @@ storesRouter.post("/:id/confirm-namespace-deleted", ah(async (req, res) => {
     [req.params.id]
   );
   if (!rows[0]) return res.status(409).json({ error: "Store is not waiting for namespace cleanup" });
+  res.json({ ok: true });
+}));
+
+// Forget a store that is fully deleted (namespace cleanup already confirmed). Frees its slug for reuse.
+storesRouter.delete("/:id/record", ah(async (req, res) => {
+  if (!isAdmin(req.user)) return res.status(403).json({ error: "Only an admin can remove deleted store records" });
+  const { rowCount } = await pool.query("DELETE FROM stores WHERE id = $1 AND status = 'deleted'", [req.params.id]);
+  if (!rowCount) return res.status(409).json({ error: "Only deleted stores can be removed from the list" });
   res.json({ ok: true });
 }));

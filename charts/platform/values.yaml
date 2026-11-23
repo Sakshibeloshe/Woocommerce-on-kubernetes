@@ -124,6 +124,25 @@ gateway:
       requests: { cpu: 50m, memory: 128Mi }
       limits: { cpu: 500m, memory: 512Mi }
 
+# Automatic multi-store provisioning (Stores page). Off = operator scripts (scripts/*store*).
+# On = an in-cluster provisioner with narrow RBAC creates/deletes store namespaces via Helm.
+provisioner:
+  enabled: false
+  image: { repository: store-provisioner, tag: "0.1.0" }
+  admissionPolicy: true              # ValidatingAdmissionPolicy pinning it to its own store-* namespaces
+  maxParallel: 2                     # stores provisioned at the same time
+  timeoutMinutes: 20                 # then the store fails with a clear reason (Retry resumes)
+  pollIntervalMs: 5000
+  # Where the Kubernetes API is reachable from pods (k3s: node IP:6443 / 10.43.0.1:443).
+  apiServerCIDRs: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16]
+  # Overrides for the stores it creates (base: the `store` block above).
+  store:
+    mysql: { storage: 3Gi }
+    wordpress: { storage: 3Gi }
+  resources:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits: { cpu: "1", memory: 384Mi }
+
 dashboard:
   image: { repository: mcp-dashboard, tag: "0.2.1" }
   resources:

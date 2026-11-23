@@ -23,6 +23,23 @@ export function Modal({ title, onClose, children }: { title: string; onClose: ()
   )
 }
 
+/** Copy to clipboard. navigator.clipboard only exists on HTTPS/localhost, so fall back to execCommand on plain HTTP. */
+export async function copyText(text: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard && window.isSecureContext) { await navigator.clipboard.writeText(text); return true }
+  } catch { /* fall through */ }
+  const area = document.createElement('textarea')
+  area.value = text
+  area.setAttribute('readonly', '')
+  area.className = 'offscreen'
+  document.body.appendChild(area)
+  area.select()
+  let ok = false
+  try { ok = document.execCommand('copy') } catch { ok = false }
+  area.remove()
+  return ok
+}
+
 /** A value the user must copy now (new API key, invite link). */
 export function SecretOnce({ label, value, note }: { label: string; value: string; note: string }) {
   const [copied, setCopied] = useState(false)
@@ -31,7 +48,7 @@ export function SecretOnce({ label, value, note }: { label: string; value: strin
       <div className="secret-label">{label}</div>
       <div className="secret-row">
         <code>{value}</code>
-        <button onClick={async () => { await navigator.clipboard.writeText(value); setCopied(true) }}>
+        <button onClick={async () => setCopied(await copyText(value))}>
           {copied ? 'Copied' : 'Copy'}
         </button>
       </div>

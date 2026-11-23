@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # One command for the whole local system:
 #   1. create the k3d cluster (if it doesn't exist)
-#   2. build our 5 images and load them into the cluster
+#   2. build our 6 images and load them into the cluster
 #   3. helm upgrade --install with values-local.yaml
 # Run with Git Bash on Windows:  & "C:\Program Files\Git\bin\bash.exe" scripts/local-up.sh
 set -euo pipefail
@@ -18,6 +18,7 @@ IMAGES=(
   "mcp-toolbox:0.1.1=mcp-toolbox"
   "mcp-gateway:0.3.3=gateway"
   "mcp-dashboard:0.2.1=dashboard"
+  "store-provisioner:0.1.0=store-provisioner/Dockerfile"   # context = repo root (bundles charts/store)
 )
 
 echo "== 1. Cluster"
@@ -62,7 +63,11 @@ echo "== 2. Images"
 names=()
 for entry in "${IMAGES[@]}"; do
   image=${entry%%=*}; dir=${entry#*=}
-  docker build -q -t "$image" "$dir" >/dev/null && echo "  built $image"
+  if [[ "$dir" == */Dockerfile ]]; then
+    docker build -q -t "$image" -f "$dir" . >/dev/null && echo "  built $image"
+  else
+    docker build -q -t "$image" "$dir" >/dev/null && echo "  built $image"
+  fi
   names+=("$image")
 done
 # Public images too: pulled once into your Docker and copied into the cluster. A fresh

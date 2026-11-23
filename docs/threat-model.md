@@ -136,3 +136,24 @@ enforces "at least one active admin" so the team can't lock itself out.
 - In-cluster traffic is plain HTTP (no mTLS); NetworkPolicies limit who can see it.
 - The official WordPress image starts as root.
 - Session cookies aren't `Secure` locally (HTTP); they are when TLS is enabled.
+
+## Store provisioner (automatic multi-store)
+
+The provisioner is the only component with a Kubernetes API token, so it is the most valuable
+target after the gateway. It is kept out of reach and boxed in:
+
+- **Not reachable**: no Service, no Ingress, and a NetworkPolicy with no inbound rules. It only talks to
+  Postgres and the API server. Users influence it only through rows the gateway writes (slug, title),
+  which it validates (`^store-[a-z][a-z0-9-]*-[a-f0-9]{8}$`, hostname and release patterns) and passes
+  to `kubectl`/`helm` as argument lists, never through a shell.
+- **Narrow RBAC**: cluster-wide it can create/delete namespaces, manage RoleBindings and bind exactly
+  one ClusterRole (`store-provisioner-store-admin`). Workload permissions exist only inside namespaces
+  where it bound that role.
+- **Admission policy** (`ValidatingAdmissionPolicy store-provisioner-scope`): RBAC can't restrict those
+  verbs by name, so the API server additionally denies its requests unless the namespace is `store-*`
+  *and* labelled `managed-by=store-provisioner`, and RoleBindings may only point at store-admin.
+  A compromised provisioner therefore can't delete `gateway`/`store`/`kube-system`, read the gateway's
+  Secrets, or grant itself cluster-admin. Operator-created store namespaces aren't labelled, so it
+  refuses to delete them too.
+- **Blast radius of a store**: each store namespace has default-deny NetworkPolicies, its own Secrets
+  and DB, a ResourceQuota and LimitRange; its MCP server accepts traffic only from gateway pods.

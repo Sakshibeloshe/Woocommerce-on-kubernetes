@@ -98,11 +98,12 @@ export const api = {
   chatConfig: () => request<{ enabled: boolean; model: string }>('GET', '/api/chat/config'),
   chat: (messages: ChatTurn[]) => request<{ reply: string; steps: ChatStep[] }>('POST', '/api/chat', { messages }),
   geo: (search = '', per_page = 50) => request<GeoReport>('GET', `/api/geo?${new URLSearchParams({ ...(search && { search }), per_page: String(per_page) })}`),
-  stores: () => request<{ stores: Store[]; max_per_user: number }>('GET', '/api/stores'),
+  stores: () => request<{ stores: Store[]; max_per_user: number; auto_provision?: boolean }>('GET', '/api/stores'),
   createStore: (s: { slug: string; title: string }) => request<{ store: Store }>('POST', '/api/stores', s),
   provisionStore: (id: string) => request<{ store: Store }>('POST', `/api/stores/${id}/provision`),
   registerStore: (id: string) => request<{ store: Store }>('POST', `/api/stores/${id}/register`),
   deleteStore: (id: string) => request<{ store: Store }>('DELETE', `/api/stores/${id}`),
+  purgeStore: (id: string) => request<{ ok: boolean }>('DELETE', `/api/stores/${id}/record`),
   confirmStoreNamespaceDeleted: (id: string) => request<{ ok: boolean }>('POST', `/api/stores/${id}/confirm-namespace-deleted`),
 }
 

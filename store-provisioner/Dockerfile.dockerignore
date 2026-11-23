@@ -1,0 +1,7 @@
+# Context is the repo root; send only what this image needs (BuildKit reads <Dockerfile>.dockerignore).
+*
+!store-provisioner/package.json
+!store-provisioner/package-lock.json
+!store-provisioner/tsconfig.json
+!store-provisioner/src
+!charts/store

@@ -1,0 +1,67 @@
+{{- if .Values.provisioner.enabled }}
+{{- $ns := .Values.namespaces.gateway -}}
+# Least-privilege RBAC for the store provisioner.
+#
+# Cluster-wide it may only: create/get/delete namespaces, manage RoleBindings, and BIND one role.
+# Everything it does inside a store (Deployments, Secrets, PVCs, Ingress, ...) comes from the
+# store-admin ClusterRole, which it binds into each store namespace it creates. The admission
+# policy (admission-policy.yaml) pins all of this to store-* namespaces labelled as its own,
+# so it can't touch gateway, the base store, kube-system, or grant itself anything else.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: store-provisioner
+  namespace: {{ $ns }}
+  labels: {{- include "platform.labels" . | nindent 4 }}
+automountServiceAccountToken: false     # mounted only into the provisioner pod (see deployment.yaml)
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: store-provisioner
+  labels: {{- include "platform.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: [namespaces]
+    verbs: [get, list, create, delete]
+  - apiGroups: [rbac.authorization.k8s.io]
+    resources: [rolebindings]
+    verbs: [get, create, update, patch, delete]
+  # May grant exactly one role (store-admin) and nothing else: RBAC's escalation check.
+  - apiGroups: [rbac.authorization.k8s.io]
+    resources: [clusterroles]
+    verbs: [bind]
+    resourceNames: [store-provisioner-store-admin]
+---
+# Used only through per-namespace RoleBindings: what Helm needs to install the store chart.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: store-provisioner-store-admin
+  labels: {{- include "platform.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: [secrets, configmaps, services, persistentvolumeclaims, serviceaccounts, resourcequotas, limitranges]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [""]
+    resources: [pods, pods/log, events, endpoints]
+    verbs: [get, list, watch]
+  - apiGroups: [apps]
+    resources: [deployments, statefulsets, replicasets]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [batch]
+    resources: [jobs]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [networking.k8s.io]
+    resources: [ingresses, networkpolicies]
+    verbs: [get, list, watch, create, update, patch, delete]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: store-provisioner
+  labels: {{- include "platform.labels" . | nindent 4 }}
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: store-provisioner }
+subjects:
+  - { kind: ServiceAccount, name: store-provisioner, namespace: {{ $ns }} }
+{{- end }}

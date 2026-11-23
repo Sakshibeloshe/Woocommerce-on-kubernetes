@@ -199,6 +199,16 @@ td > .badge { margin-left: 0; }
 .geo-record p { margin: 6px 0; }
 
 /* ---------- multi-store ---------- */
+.offscreen { position: fixed; top: -1000px; left: -1000px; opacity: 0; }
+.store-card.deleted { padding: 14px 20px; background: var(--panel); }
+.store-card.deleted h3 { color: var(--muted); }
+.store-deleted-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.store-help { margin-top: 8px; }
+.store-progress { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 12.5px; color: var(--ink-soft); }
+.spinner { width: 13px; height: 13px; border-radius: 50%; border: 2px solid var(--sky); border-top-color: var(--ink); flex-shrink: 0; }
+@media (prefers-reduced-motion: no-preference) { .spinner { animation: spin .9s linear infinite; } }
+@keyframes spin { to { transform: rotate(360deg); } }
+.store-help summary { cursor: pointer; color: var(--ink-soft); font-size: 12px; font-weight: 600; }
 .store-create { display: flex; flex-direction: column; gap: 14px; max-width: 680px; }
 .store-capacity { margin-bottom: 14px; background: var(--sky-soft); border-color: var(--sky); }
 .store-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }

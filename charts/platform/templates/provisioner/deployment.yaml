@@ -1,0 +1,105 @@
+{{- if .Values.provisioner.enabled }}
+{{- $ns := .Values.namespaces.gateway -}}
+{{- $store := mergeOverwrite (deepCopy (omit .Values.store "host" "title" "adminEmail")) (deepCopy (.Values.provisioner.store | default dict)) -}}
+# Base values for every store the provisioner installs: same registry, storage, ingress and
+# NetworkPolicy settings as this release. Per-store host/title are added by the provisioner.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: store-provisioner-values
+  namespace: {{ $ns }}
+  labels: {{- include "platform.labels" . | nindent 4 }}
+data:
+  store-values.yaml: |
+    {{- toYaml (dict
+        "global" .Values.global
+        "ingress" .Values.ingress
+        "networkPolicies" .Values.networkPolicies
+        "namespaces" (dict "create" false "gateway" $ns)
+        "secrets" (dict "generate" true)
+        "store" $store
+        "mcp" (dict "woocommerce" .Values.mcp.woocommerce)) | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: store-provisioner
+  namespace: {{ $ns }}
+  labels: {{- include "platform.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  strategy: { type: Recreate }           # never two provisioners at once (it also takes a Postgres lock)
+  selector:
+    matchLabels: { app: store-provisioner }
+  template:
+    metadata:
+      labels: { app: store-provisioner }
+      annotations:
+        checksum/values: {{ toYaml $store | sha256sum | trunc 16 }}
+    spec:
+      serviceAccountName: store-provisioner
+      automountServiceAccountToken: true  # the only pod in the platform with an API token
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+        - name: provisioner
+          image: {{ include "platform.image" (list .Values.provisioner.image $) }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          env:
+            - { name: PGHOST, value: postgres }
+            - { name: PGDATABASE, value: gateway }
+            - { name: PGUSER, value: gateway }
+            - name: PGPASSWORD
+              valueFrom: { secretKeyRef: { name: gateway-db, key: password } }
+            - { name: MAX_PARALLEL, value: {{ .Values.provisioner.maxParallel | quote }} }
+            - { name: PROVISION_TIMEOUT_MINUTES, value: {{ .Values.provisioner.timeoutMinutes | quote }} }
+            - { name: POLL_INTERVAL_MS, value: {{ .Values.provisioner.pollIntervalMs | quote }} }
+            - { name: STORE_BASE_VALUES, value: /config/store-values.yaml }
+            - { name: STORE_CLUSTER_ROLE, value: store-provisioner-store-admin }
+            - { name: SERVICE_ACCOUNT, value: store-provisioner }
+            - name: POD_NAMESPACE
+              valueFrom: { fieldRef: { fieldPath: metadata.namespace } }
+          ports:
+            - containerPort: 8080
+          readinessProbe:
+            httpGet: { path: /healthz, port: 8080 }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /healthz, port: 8080 }
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          resources: {{- toYaml .Values.provisioner.resources | nindent 12 }}
+          {{- include "platform.containerSecurity" . | nindent 10 }}
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }      # helm/kubectl caches; root filesystem is read-only
+            - { name: values, mountPath: /config, readOnly: true }
+      volumes:
+        - { name: tmp, emptyDir: { sizeLimit: 256Mi } }
+        - { name: values, configMap: { name: store-provisioner-values } }
+{{- if .Values.networkPolicies.enabled }}
+---
+# Provisioner: nothing may connect to it. Out: Postgres and the Kubernetes API only.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: store-provisioner
+  namespace: {{ $ns }}
+  labels: {{- include "platform.labels" . | nindent 4 }}
+spec:
+  podSelector: { matchLabels: { app: store-provisioner } }
+  policyTypes: [Ingress, Egress]
+  ingress: []
+  egress:
+    - to: [{ podSelector: { matchLabels: { app: postgres } } }]
+      ports: [{ port: 5432, protocol: TCP }]
+    - to:
+        {{- range .Values.provisioner.apiServerCIDRs }}
+        - ipBlock: { cidr: {{ . }} }
+        {{- end }}
+      ports: [{ port: 443, protocol: TCP }, { port: 6443, protocol: TCP }]
+{{- end }}
+{{- end }}

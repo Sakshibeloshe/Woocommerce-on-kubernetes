@@ -19,3 +19,7 @@ gateway:
         - ipBlock: { cidr: 192.168.65.0/24 }
       ports:
         - { port: 11434, protocol: TCP }
+
+# Automatic multi-store provisioning (set enabled: false for the manual operator scripts).
+provisioner:
+  enabled: true

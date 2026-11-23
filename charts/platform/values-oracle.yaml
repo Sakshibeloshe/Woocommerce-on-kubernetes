@@ -47,3 +47,5 @@ gateway:
         - { port: 443, protocol: TCP }
   postgres:
     storage: 5Gi
+provisioner:
+  enabled: true

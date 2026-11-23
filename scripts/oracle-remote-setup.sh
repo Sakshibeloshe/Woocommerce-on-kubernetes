@@ -16,12 +16,19 @@ step "2. firewall check (iptables 80/443)"
 sudo iptables -L INPUT -n --line-numbers | grep -E 'dpt:(80|443)' || echo "WARN: no iptables ACCEPT for 80/443"
 
 step "3. repo"
-if [ -d ~/Woocommerce-on-kubernetes/.git ]; then git -C ~/Woocommerce-on-kubernetes pull --ff-only; else git clone https://github.com/Sakshibeloshe/Woocommerce-on-kubernetes.git ~/Woocommerce-on-kubernetes; fi
+if [ -d ~/Woocommerce-on-kubernetes/.git ]; then
+  git -C ~/Woocommerce-on-kubernetes fetch -q origin && git -C ~/Woocommerce-on-kubernetes reset -q --hard origin/main
+else
+  git clone https://github.com/Sakshibeloshe/Woocommerce-on-kubernetes.git ~/Woocommerce-on-kubernetes
+fi
 cd ~/Woocommerce-on-kubernetes || exit 1
+# Charts uploaded by oracle-update.bat win over GitHub, so the VM runs exactly what is on your PC.
+if [ -f ~/charts.tgz ]; then tar -xzf ~/charts.tgz -C ~/Woocommerce-on-kubernetes && rm -f ~/charts.tgz && echo "using charts uploaded from your PC"; fi
+git log -1 --format='repo at %h %s' 
 
 step "4. image pulls"
 FAILED=0
-for i in mcp-notes:0.1.1 mcp-toolbox:0.1.1 mcp-woocommerce:0.1.2 mcp-gateway:${GATEWAY_TAG:-0.3.2} mcp-dashboard:${DASHBOARD_TAG:-0.1.3}; do
+for i in mcp-notes:0.1.1 mcp-toolbox:0.1.1 mcp-woocommerce:0.1.2 mcp-gateway:${GATEWAY_TAG:-0.3.2} mcp-dashboard:${DASHBOARD_TAG:-0.1.3} ${PROVISIONER_TAG:+store-provisioner:$PROVISIONER_TAG}; do
   if sudo k3s crictl pull ghcr.io/sakshibeloshe/$i >/dev/null 2>&1; then echo "ok     $i"; else echo "FAILED $i"; FAILED=1; fi
 done
 [ $FAILED = 0 ] || { echo "FAIL: make those GHCR packages Public (and arm64). Stopping."; exit 1; }
@@ -100,11 +107,13 @@ $LLM_BLOCK
         - { port: 443, protocol: TCP }
   postgres:
     storage: 5Gi
+provisioner:
+  enabled: true
 EOF
 head -3 charts/platform/values-oracle.yaml
 
 step "6. helm install (5-15 min)"
-helm upgrade --install platform charts/platform -f charts/platform/values-oracle.yaml ${DASHBOARD_TAG:+--set dashboard.image.tag=$DASHBOARD_TAG} ${GATEWAY_TAG:+--set gateway.image.tag=$GATEWAY_TAG} --timeout 15m --wait
+helm upgrade --install platform charts/platform -f charts/platform/values-oracle.yaml ${DASHBOARD_TAG:+--set dashboard.image.tag=$DASHBOARD_TAG} ${GATEWAY_TAG:+--set gateway.image.tag=$GATEWAY_TAG} ${PROVISIONER_TAG:+--set provisioner.image.tag=$PROVISIONER_TAG} --timeout 15m --wait
 RC=$?
 echo "helm exit code: $RC"
 [ $LLM_RESTART = 1 ] && kubectl -n gateway rollout restart deploy/gateway && kubectl -n gateway rollout status deploy/gateway --timeout=180s

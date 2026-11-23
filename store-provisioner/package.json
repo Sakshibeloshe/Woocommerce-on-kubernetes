@@ -1,0 +1,20 @@
+{
+  "name": "store-provisioner",
+  "version": "0.1.0",
+  "description": "Provisions and deletes per-store namespaces (Helm) for the MCP gateway's Stores page",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js"
+  },
+  "license": "ISC",
+  "dependencies": {
+    "pg": "^8.23.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "@types/pg": "^8.23.1",
+    "typescript": "^5.9.3"
+  }
+}

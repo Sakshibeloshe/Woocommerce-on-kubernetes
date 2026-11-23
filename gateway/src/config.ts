@@ -50,6 +50,8 @@ export const config = {
   stores: {
     hostSuffix: (process.env.STORE_HOST_SUFFIX ?? "localtest.me").replace(/^\.+|\.+$/g, ""),
     maxPerUser: Number(process.env.STORES_MAX_PER_USER ?? 3),
+    // true when the in-cluster store provisioner is deployed: new stores start provisioning at once.
+    autoProvision: process.env.STORES_AUTO_PROVISION === "true",
   },
 
   // Chat agent: any OpenAI-compatible chat completions API.
