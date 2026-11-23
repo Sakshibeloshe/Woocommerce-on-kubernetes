@@ -16,8 +16,8 @@ IMAGES=(
   "mcp-woocommerce:0.1.2=mcp-woocommerce"
   "mcp-notes:0.1.1=mcp-notes"
   "mcp-toolbox:0.1.1=mcp-toolbox"
-  "mcp-gateway:0.3.3=gateway"
-  "mcp-dashboard:0.2.2=dashboard"
+  "mcp-gateway:0.3.4=gateway"
+  "mcp-dashboard:0.2.3=dashboard"
   "store-provisioner:0.1.0=store-provisioner/Dockerfile"   # context = repo root (bundles charts/store)
 )
 

@@ -95,7 +95,7 @@ export function Stores({ user }: { user: User }) {
       <form className="store-create card" onSubmit={create}>
         <h3>Create a store</h3>
         <label>Store name<input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={80} placeholder="Blue Shop" required /></label>
-        <label>Store slug<input value={slug} onChange={(e) => setSlug(e.target.value)} pattern="[a-z][a-z0-9]*(-[a-z0-9]+)*" maxLength={16} placeholder="blue-shop" required /><span className="muted small">Lowercase letters, numbers, and single hyphens. Slugs are permanent and globally unique.</span></label>
+        <label>Store slug<input value={slug} onChange={(e) => setSlug(e.target.value)} pattern="[a-z][a-z0-9]*(-[a-z0-9]*[a-z][a-z0-9]*)*" title="Lowercase letters, numbers and single hyphens; each part after a hyphen needs a letter (shop-one, not shop-1)" maxLength={16} placeholder="blue-shop" required /><span className="muted small">Lowercase letters, numbers, and single hyphens. Each part after a hyphen needs a letter (<code>shop-one</code>, not <code>shop-1</code>). Slugs are permanent and globally unique.</span></label>
         <div className="form-actions"><button className="primary" disabled={busy}>{busy ? 'Creating…' : 'Create store'}</button></div>
       </form>
       <ErrorBox error={error} />

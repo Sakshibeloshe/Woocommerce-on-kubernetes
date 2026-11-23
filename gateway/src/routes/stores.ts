@@ -11,7 +11,12 @@ import { validateUpstreamUrl } from "../ssrf.js";
 export const storesRouter = Router();
 storesRouter.use(requireSession);
 
-const slugSchema = z.string().regex(/^[a-z][a-z0-9]*(-[a-z0-9]+)*$/, "Use lowercase letters, numbers, and single hyphens").max(16);
+// Every part after a hyphen needs a letter: nip.io-style DNS would read "shop-1.129.154.239.224.nip.io"
+// as the IP 1.129.154.239, so slugs like "shop-1" would get an unreachable hostname.
+const slugSchema = z.string()
+  .regex(/^[a-z][a-z0-9]*(-[a-z0-9]+)*$/, "Use lowercase letters, numbers, and single hyphens")
+  .regex(/^[a-z][a-z0-9]*(-[a-z0-9]*[a-z][a-z0-9]*)*$/, "Each part after a hyphen must contain a letter (e.g. shop-one, not shop-1): IP-based DNS like nip.io misreads a trailing number as part of the IP")
+  .max(16);
 const storeProjection = "s.id, s.owner_user_id, u.email AS owner_email, s.slug, s.title, s.namespace, " +
   "s.release_name, s.hostname, s.status, s.last_error, s.created_at, s.updated_at";
 const isAdmin = (user: User | undefined) => user?.role === "admin";
